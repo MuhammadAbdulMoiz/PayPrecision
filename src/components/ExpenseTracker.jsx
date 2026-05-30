@@ -211,7 +211,7 @@ function SpendingDonut({ data, total }) {
 
 const EMPTY_FORM = { name: '', category: 'Food', amount: '', note: '', recurring: false }
 
-export default function ExpenseTracker({ finalSalary = 0 }) {
+export default function ExpenseTracker({ finalSalary = 0, loans = [] }) {
   const { expenses, addExpense, updateExpense, deleteExpense, populateRecurring } = useExpenses()
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
@@ -223,9 +223,17 @@ export default function ExpenseTracker({ finalSalary = 0 }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [populating, setPopulating] = useState(false)
 
+  // Active loans that are in PKR and not yet fully paid — represent cash you received but haven't returned
+  const activeLoanCash = loans
+    .filter(l => l.status !== 'paid' && (l.currency === 'PKR' || !l.currency))
+    .reduce((s, l) => s + (l.remaining || 0), 0)
+
+  // Total available = salary + cash from active loans still in your possession
+  const totalAvailable = finalSalary + activeLoanCash
+
   const filtered = expenses.filter((e) => e.month === filterMonth)
   const total    = filtered.reduce((s, e) => s + (e.amount || 0), 0)
-  const salaryRatio = finalSalary > 0 ? (total / finalSalary) * 100 : 0
+  const salaryRatio = totalAvailable > 0 ? (total / totalAvailable) * 100 : 0
 
   const byCategory = useMemo(() =>
     CATEGORIES.map((cat) => ({
@@ -309,25 +317,36 @@ export default function ExpenseTracker({ finalSalary = 0 }) {
       </div>
 
       <div className="p-5">
-        {/* ── Salary health bar (always visible) ── */}
-        {finalSalary > 0 && total > 0 && (
+        {/* ── Cash availability bar ── */}
+        {totalAvailable > 0 && total > 0 && (
           <div className="mb-5 rounded-xl bg-white/5 p-3">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] text-slate-400">Expenses vs Salary</span>
+              <span className="text-[11px] text-slate-400">
+                Expenses vs Available Cash
+              </span>
               <span className="text-[11px] font-bold" style={{ color: healthColor }}>
                 {healthLabel} · {salaryRatio.toFixed(1)}%
               </span>
             </div>
-            <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full transition-all duration-500"
+            {/* Stacked bar: salary portion + loan portion */}
+            <div className="h-2 rounded-full bg-white/10 overflow-hidden flex">
+              <div className="h-full transition-all duration-500"
                 style={{ width: `${Math.min(salaryRatio, 100)}%`, backgroundColor: healthColor }} />
             </div>
             <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
               <span>Spent: PKR {fmtPKR(total)}</span>
-              <span style={{ color: finalSalary - total >= 0 ? '#10b981' : '#ef4444' }}>
-                {finalSalary - total >= 0 ? 'Left: ' : 'Over by: '}PKR {fmtPKR(Math.abs(finalSalary - total))}
+              <span style={{ color: totalAvailable - total >= 0 ? '#10b981' : '#ef4444' }}>
+                {totalAvailable - total >= 0 ? 'Left: ' : 'Over by: '}PKR {fmtPKR(Math.abs(totalAvailable - total))}
               </span>
             </div>
+            {activeLoanCash > 0 && (
+              <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-500">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-400 inline-block" />
+                Salary PKR {fmtPKR(finalSalary)}
+                <span className="text-red-400 ml-1">+ PKR {fmtPKR(activeLoanCash)} from active loans</span>
+                <span className="ml-1">= PKR {fmtPKR(totalAvailable)} available</span>
+              </div>
+            )}
           </div>
         )}
 

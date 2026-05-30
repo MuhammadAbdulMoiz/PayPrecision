@@ -108,7 +108,7 @@ export default function GoalsPage({ finalSalary }) {
       {/* Expense Tracker */}
       <div>
         <h3 className="mb-3 text-lg font-bold text-white light:text-slate-800">Expense Tracker</h3>
-        <ExpenseTracker finalSalary={finalSalary} />
+        <ExpenseTracker finalSalary={finalSalary} loans={loans} />
       </div>
 
       {showForm && (
