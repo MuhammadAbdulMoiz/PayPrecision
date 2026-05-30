@@ -315,6 +315,14 @@ export default function ExpenseTracker({ finalSalary = 0, loans = [] }) {
             className="rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10">
             CSV
           </button>
+          <button onClick={() => setShowScanner(true)} title="Scan receipt"
+            className="flex items-center gap-1 rounded-lg border border-purple-500/30 px-2.5 py-1.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/10">
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+              <circle cx="12" cy="13" r="3"/>
+            </svg>
+            Scan
+          </button>
           <button onClick={() => setShowForm((v) => !v)}
             className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500">
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
@@ -663,6 +671,17 @@ export default function ExpenseTracker({ finalSalary = 0, loans = [] }) {
           </div>
         )}
       </div>
+
+      {showScanner && (
+        <ReceiptScanner
+          onClose={() => setShowScanner(false)}
+          onParsed={({ name, amount, date }) => {
+            if (date && /^\d{4}-\d{2}/.test(date)) setFilterMonth(date.slice(0, 7))
+            setForm({ ...EMPTY_FORM, name: name || '', amount: amount || '' })
+            setShowForm(true)
+          }}
+        />
+      )}
     </div>
   )
 }
