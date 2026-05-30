@@ -92,7 +92,7 @@ export default function App() {
   const [annualBonusMode, setAnnualBonusMode] = useLocalStorage('pp-annual-bonus-mode', 'fixed')
   const attendanceBonuses = Array.isArray(rawAttendance) ? rawAttendance : []
 
-  const { entries, addEntry, clearHistory, deleteEntry } = useHistory()
+  const { entries, addEntry, clearHistory, deleteEntry, updateEntryDate } = useHistory()
   const {
     aiItems, laptopItems,
     addAI, updateAI, deleteAI, uploadAILogo,
@@ -366,6 +366,7 @@ export default function App() {
               entries={entries}
               onClear={clearHistory}
               onDelete={deleteEntry}
+              onUpdateDate={updateEntryDate}
               onDownloadReport={handleDownloadReport}
             />
           </main>

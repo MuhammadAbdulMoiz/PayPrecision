@@ -39,5 +39,14 @@ export function useHistory() {
     setEntries((prev) => prev.filter((e) => e.id !== id))
   }, [])
 
-  return { entries, addEntry, clearHistory, deleteEntry }
+  const updateEntryDate = useCallback(async (id, date) => {
+    await fetch(`/api/history/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date }),
+    }).catch(() => {})
+    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, date } : e))
+  }, [])
+
+  return { entries, addEntry, clearHistory, deleteEntry, updateEntryDate }
 }

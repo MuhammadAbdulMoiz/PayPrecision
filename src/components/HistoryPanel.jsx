@@ -142,10 +142,16 @@ function SalaryChart({ entries }) {
   )
 }
 
-export default function HistoryPanel({ entries, onClear, onDelete, onDownloadReport }) {
+function toMonthValue(iso) {
+  return new Date(iso).toISOString().slice(0, 7)
+}
+
+export default function HistoryPanel({ entries, onClear, onDelete, onUpdateDate, onDownloadReport }) {
   const [search, setSearch] = useState('')
   const [yearFilter, setYearFilter] = useState('all')
   const [monthFilter, setMonthFilter] = useState('all')
+  const [editingId, setEditingId] = useState(null)
+  const [editMonth, setEditMonth] = useState('')
 
   const years = useMemo(() => {
     const set = new Set(entries.map((e) => new Date(e.date).getFullYear()))
@@ -273,9 +279,41 @@ export default function HistoryPanel({ entries, onClear, onDelete, onDownloadRep
                       </svg>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-slate-200 light:text-slate-700">
-                        {formatDate(entry.date)}
-                      </p>
+                      {editingId === entry.id ? (
+                        <form
+                          className="flex items-center gap-1.5"
+                          onSubmit={async (e) => {
+                            e.preventDefault()
+                            const iso = new Date(editMonth + '-01T12:00:00').toISOString()
+                            await onUpdateDate(entry.id, iso)
+                            setEditingId(null)
+                          }}
+                        >
+                          <input
+                            type="month"
+                            value={editMonth}
+                            onChange={e => setEditMonth(e.target.value)}
+                            autoFocus
+                            required
+                            className="rounded border border-blue-400/40 bg-white/5 px-2 py-1 text-xs text-white outline-none focus:border-blue-400/70"
+                          />
+                          <button type="submit" className="rounded bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-blue-500">Save</button>
+                          <button type="button" onClick={() => setEditingId(null)} className="text-slate-500 hover:text-white text-[10px] px-1">✕</button>
+                        </form>
+                      ) : (
+                        <button
+                          className="group/date flex items-center gap-1.5 text-left"
+                          onClick={() => { setEditingId(entry.id); setEditMonth(toMonthValue(entry.date)) }}
+                          title="Click to change month"
+                        >
+                          <p className="text-sm font-medium text-slate-200 group-hover/date:text-blue-400 transition-colors">
+                            {formatDate(entry.date)}
+                          </p>
+                          <svg className="h-3 w-3 text-slate-600 group-hover/date:text-blue-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      )}
                       <p className="text-[11px] text-slate-500">
                         Inv {invId(entry.date, idx)}
                       </p>

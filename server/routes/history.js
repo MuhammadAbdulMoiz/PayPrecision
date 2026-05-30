@@ -23,6 +23,14 @@ module.exports = function historyRouter(dbPath) {
     res.status(201).json({ ok: true })
   })
 
+  router.patch('/:id', (req, res) => {
+    const { date } = req.body
+    if (!date) return res.status(400).json({ error: 'date is required' })
+    const db = getDb(dbPath)
+    db.prepare('UPDATE history SET date = ? WHERE id = ?').run(date, req.params.id)
+    res.json({ ok: true })
+  })
+
   router.delete('/:id', (req, res) => {
     const db = getDb(dbPath)
     db.prepare('DELETE FROM history WHERE id = ?').run(req.params.id)
