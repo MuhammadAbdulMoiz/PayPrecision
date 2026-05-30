@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo } from 'react'
 
 function formatDate(iso) {
   const d = new Date(iso)
@@ -50,94 +50,126 @@ function downloadCSV(entries) {
   URL.revokeObjectURL(url)
 }
 
-// SVG salary projection chart
+function fmtK(v) {
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M'
+  if (v >= 1_000)     return Math.round(v / 1_000) + 'K'
+  return Math.round(v)
+}
+
+// Stacked bar comparison chart — base / OT / reimbursements / bonus per month
 function SalaryChart({ entries }) {
+  const [hovered, setHovered] = useState(null)
   if (entries.length < 2) return null
 
   const sorted = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(-12)
-  const salaries = sorted.map((e) => totalFor(e))
-  const min = Math.min(...salaries)
-  const max = Math.max(...salaries)
-  const range = max - min || 1
-
-  const W = 600
-  const H = 140
-  const PAD = { top: 16, right: 16, bottom: 32, left: 64 }
-  const chartW = W - PAD.left - PAD.right
-  const chartH = H - PAD.top - PAD.bottom
-
-  const pts = sorted.map((e, i) => {
-    const x = PAD.left + (i / (sorted.length - 1)) * chartW
-    const y = PAD.top + chartH - ((e.results.finalSalary - min) / range) * chartH
-    return { x, y, e }
-  })
-
-  const polyline = pts.map((p) => `${p.x},${p.y}`).join(' ')
-  // Filled area path
-  const area = `M${pts[0].x},${PAD.top + chartH} ` +
-    pts.map((p) => `L${p.x},${p.y}`).join(' ') +
-    ` L${pts[pts.length - 1].x},${PAD.top + chartH} Z`
-
-  // Y axis labels
-  const yTicks = [0, 0.5, 1].map((t) => ({
-    value: min + t * range,
-    y: PAD.top + chartH - t * chartH,
+  const bars = sorted.map(e => ({
+    month:  new Date(e.date).toLocaleString('en-US', { month: 'short', year: '2-digit' }),
+    base:   Math.round(e.results?.monthlyPKR      || 0),
+    ot:     Math.round(e.results?.extraPay        || 0),
+    reimb:  Math.round(e.results?.reimbursementPKR || 0),
+    bonus:  Math.round(e.results?.annualBonusPKR  || 0),
   }))
+
+  const maxVal  = Math.max(...bars.map(b => b.base + b.ot + b.reimb + b.bonus), 1)
+  const W = 560, H = 200
+  const PAD = { top: 20, right: 12, bottom: 36, left: 52 }
+  const cW  = W - PAD.left - PAD.right
+  const cH  = H - PAD.top  - PAD.bottom
+  const slot = cW / bars.length
+  const barW = Math.max(Math.min(slot * 0.65, 44), 10)
+
+  const segments = [
+    { key: 'base',  color: '#3b82f6', label: 'Base' },
+    { key: 'ot',    color: '#f59e0b', label: 'OT'   },
+    { key: 'reimb', color: '#8b5cf6', label: 'Reimb' },
+    { key: 'bonus', color: '#10b981', label: 'Bonus' },
+  ]
+  const hasOT    = bars.some(b => b.ot > 0)
+  const hasReimb = bars.some(b => b.reimb > 0)
+  const hasBonus = bars.some(b => b.bonus > 0)
+  const visibleSegs = segments.filter(s =>
+    s.key === 'base' || (s.key === 'ot' && hasOT) || (s.key === 'reimb' && hasReimb) || (s.key === 'bonus' && hasBonus)
+  )
 
   return (
     <div className="glass rounded-2xl p-5 mb-6">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-          Salary Projection
-        </h3>
-        <span className="text-[10px] text-slate-500">Last {sorted.length} entries</span>
+      <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Monthly Earnings Breakdown</h3>
+        <div className="flex items-center gap-3">
+          {visibleSegs.map(s => (
+            <span key={s.key} className="flex items-center gap-1 text-[11px] text-slate-400">
+              <span className="inline-block h-2 w-3 rounded-sm" style={{ background: s.color }} />
+              {s.label}
+            </span>
+          ))}
+        </div>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 140 }}>
-        <defs>
-          <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
 
-        {/* Grid lines */}
-        {yTicks.map((t, i) => (
-          <line key={i} x1={PAD.left} y1={t.y} x2={W - PAD.right} y2={t.y}
-            stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-        ))}
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+          <defs>
+            {visibleSegs.map(s => (
+              <linearGradient key={s.key} id={`hg-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={s.color} stopOpacity="0.95" />
+                <stop offset="100%" stopColor={s.color} stopOpacity="0.7" />
+              </linearGradient>
+            ))}
+          </defs>
 
-        {/* Y axis labels */}
-        {yTicks.map((t, i) => (
-          <text key={i} x={PAD.left - 6} y={t.y + 4} textAnchor="end"
-            fontSize="9" fill="rgba(148,163,184,0.8)">
-            {t.value >= 1000 ? `${(t.value / 1000).toFixed(0)}k` : t.value.toFixed(0)}
-          </text>
-        ))}
+          {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
+            <g key={i}>
+              <line x1={PAD.left} y1={PAD.top + cH - t * cH} x2={W - PAD.right} y2={PAD.top + cH - t * cH}
+                stroke="rgba(255,255,255,0.05)" strokeWidth="1" strokeDasharray={t === 0 ? '0' : '4 3'} />
+              <text x={PAD.left - 4} y={PAD.top + cH - t * cH + 3.5} textAnchor="end" fontSize="9" fill="rgba(100,116,139,0.9)">
+                {fmtK(t * maxVal)}
+              </text>
+            </g>
+          ))}
 
-        {/* Area fill */}
-        <path d={area} fill="url(#chartGrad)" />
+          {bars.map((b, i) => {
+            const x      = PAD.left + i * slot + (slot - barW) / 2
+            const isHov  = hovered === i
+            let stackY   = PAD.top + cH
+            return (
+              <g key={i} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}>
+                <rect x={x - 4} y={PAD.top} width={barW + 8} height={cH}
+                  fill={isHov ? 'rgba(255,255,255,0.04)' : 'transparent'} rx="3" />
+                {visibleSegs.map(s => {
+                  const val = b[s.key]
+                  if (!val) return null
+                  const segH = (val / maxVal) * cH
+                  stackY -= segH
+                  return (
+                    <rect key={s.key} x={x} y={stackY} width={barW} height={segH}
+                      fill={`url(#hg-${s.key})`} opacity={isHov ? 1 : 0.85} rx="2"
+                      style={{ transition: 'opacity .15s' }} />
+                  )
+                })}
+                <text x={x + barW / 2} y={H - 10} textAnchor="middle" fontSize="9" fill="rgba(100,116,139,0.85)">
+                  {b.month}
+                </text>
+              </g>
+            )
+          })}
+        </svg>
 
-        {/* Line */}
-        <polyline points={polyline} fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinejoin="round" />
-
-        {/* Dots */}
-        {pts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r="3.5" fill="#3b82f6" stroke="#0f172a" strokeWidth="2" />
-        ))}
-
-        {/* X axis labels — show first, middle, last */}
-        {[0, Math.floor(sorted.length / 2), sorted.length - 1].map((i) => {
-          if (!pts[i]) return null
-          const d = new Date(sorted[i].date)
-          const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+        {hovered !== null && (() => {
+          const b    = bars[hovered]
+          const xPct = ((PAD.left + hovered * slot + slot / 2) / W) * 100
+          const total = b.base + b.ot + b.reimb + b.bonus
           return (
-            <text key={i} x={pts[i].x} y={H - 6} textAnchor="middle"
-              fontSize="9" fill="rgba(148,163,184,0.7)">
-              {label}
-            </text>
+            <div className="pointer-events-none absolute top-0 z-10 rounded-xl border border-white/10 bg-slate-900/95 px-3 py-2 shadow-xl text-xs backdrop-blur-sm"
+              style={{ left: `${Math.min(Math.max(xPct, 12), 80)}%`, transform: 'translateX(-50%)' }}>
+              <p className="mb-1.5 font-semibold text-slate-200">{b.month}</p>
+              <p className="text-blue-400">Base &nbsp;&nbsp;PKR {b.base.toLocaleString()}</p>
+              {b.ot    > 0 && <p className="text-amber-400">OT &nbsp;&nbsp;&nbsp;&nbsp;PKR {b.ot.toLocaleString()}</p>}
+              {b.reimb > 0 && <p className="text-purple-400">Reimb &nbsp;PKR {b.reimb.toLocaleString()}</p>}
+              {b.bonus > 0 && <p className="text-emerald-400">Bonus &nbsp;PKR {b.bonus.toLocaleString()}</p>}
+              <p className="mt-1.5 border-t border-white/10 pt-1.5 font-bold text-white">Total PKR {total.toLocaleString()}</p>
+            </div>
           )
-        })}
-      </svg>
+        })()}
+      </div>
     </div>
   )
 }
@@ -152,7 +184,6 @@ export default function HistoryPanel({ entries, onClear, onDelete, onUpdateDate,
   const [monthFilter, setMonthFilter] = useState('all')
   const [editingId, setEditingId] = useState(null)
   const [editMonth, setEditMonth] = useState('')
-  const [expandedOT, setExpandedOT] = useState(null)
 
   const years = useMemo(() => {
     const set = new Set(entries.map((e) => new Date(e.date).getFullYear()))
@@ -255,7 +286,7 @@ export default function HistoryPanel({ entries, onClear, onDelete, onUpdateDate,
 
           {/* Table header */}
           <div className="glass rounded-2xl overflow-hidden">
-            <div className="grid grid-cols-[2fr_1.5fr_1fr_1.5fr] gap-4 border-b border-white/10 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 light:border-slate-200">
+            <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr] gap-4 border-b border-white/10 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 light:border-slate-200">
               <span>Billing Period</span>
               <span>Amount</span>
               <span>Status</span>
@@ -268,9 +299,9 @@ export default function HistoryPanel({ entries, onClear, onDelete, onUpdateDate,
               </div>
             ) : (
               filtered.map((entry, idx) => (
-                <Fragment key={entry.id}>
                 <div
-                  className="grid grid-cols-[2fr_1.5fr_1fr_1.5fr] items-center gap-4 border-b border-white/5 px-5 py-4 transition-colors hover:bg-white/[0.02] light:border-slate-100 light:hover:bg-slate-50"
+                  key={entry.id}
+                  className="grid grid-cols-[2fr_1.5fr_1fr_1fr] items-center gap-4 border-b border-white/5 px-5 py-4 last:border-b-0 transition-colors hover:bg-white/[0.02] light:border-slate-100 light:hover:bg-slate-50"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
@@ -338,17 +369,6 @@ export default function HistoryPanel({ entries, onClear, onDelete, onUpdateDate,
 
                   <div className="flex items-center justify-end gap-2">
                     <button
-                      onClick={() => setExpandedOT(expandedOT === entry.id ? null : entry.id)}
-                      title="OT Projector"
-                      className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                        expandedOT === entry.id
-                          ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
-                          : 'border-white/10 text-slate-400 hover:border-amber-500/30 hover:text-amber-400'
-                      }`}
-                    >
-                      OT
-                    </button>
-                    <button
                       onClick={() => onDelete(entry.id)}
                       className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-red-500/30 hover:text-red-400 light:border-slate-200"
                     >
@@ -356,35 +376,6 @@ export default function HistoryPanel({ entries, onClear, onDelete, onUpdateDate,
                     </button>
                   </div>
                 </div>
-
-                {/* OT Projector panel */}
-                {expandedOT === entry.id && (() => {
-                  const otRate = entry.results?.overtimeRate
-                    || ((parseFloat(entry.params?.income || 0) * parseFloat(entry.params?.dollarRate || 1)) / parseFloat(entry.params?.workingDays || 22)) * 1.5
-                  const base = entry.results?.finalSalary || 0
-                  const scenarios = [2, 5, 8, 10, 15]
-                  return (
-                    <div className="border-t border-white/5 px-5 py-3 bg-amber-500/5">
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-amber-400/70">
-                        OT Projection — based on this month&apos;s rate · PKR {formatPKR(otRate)}/day OT
-                      </p>
-                      <div className="grid grid-cols-4 gap-2">
-                        {scenarios.map(days => {
-                          const otPay = days * otRate
-                          const total = base + otPay
-                          return (
-                            <div key={days} className="rounded-lg bg-white/5 px-3 py-2 text-center">
-                              <p className="text-[10px] text-slate-500">+{days} days</p>
-                              <p className="text-xs font-semibold text-amber-400">+{formatPKR(otPay)}</p>
-                              <p className="text-[10px] text-slate-300 mt-0.5">{formatPKR(total)}</p>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })()}
-                </Fragment>
               ))
             )}
           </div>
