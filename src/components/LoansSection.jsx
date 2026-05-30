@@ -175,6 +175,7 @@ function PeopleLedger({ loans = [] }) {
 export default function LoansSection({ goals = [], loans = [], onAdd, onUpdate, onDelete, onUploadImage }) {
   const [showForm, setShowForm] = useState(false)
   const [view, setView] = useState('cards') // 'cards' | 'ledger'
+  const [showAll, setShowAll] = useState(false)
 
   const handleAdd = async (data) => {
     await onAdd(data)
@@ -308,18 +309,26 @@ export default function LoansSection({ goals = [], loans = [], onAdd, onUpdate, 
       })()}
 
       {view === 'cards' ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-start">
-          {loans.map(loan => (
-            <LoanCard
-              key={loan.id}
-              loan={loan}
-              goals={goals}
-              onDelete={onDelete}
-              onUpdate={onUpdate}
-              onUploadImage={onUploadImage}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-start">
+            {(showAll ? loans : loans.slice(0, 3)).map(loan => (
+              <LoanCard
+                key={loan.id}
+                loan={loan}
+                goals={goals}
+                onDelete={onDelete}
+                onUpdate={onUpdate}
+                onUploadImage={onUploadImage}
+              />
+            ))}
+          </div>
+          {loans.length > 3 && (
+            <button onClick={() => setShowAll(v => !v)}
+              className="mt-3 w-full rounded-xl border border-white/10 py-2 text-sm text-slate-400 transition-colors hover:border-white/20 hover:text-white">
+              {showAll ? '▲ Show less' : `▼ Show ${loans.length - 3} more loan${loans.length - 3 !== 1 ? 's' : ''}`}
+            </button>
+          )}
+        </>
       ) : (
         <PeopleLedger loans={loans} />
       )}

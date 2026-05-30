@@ -48,7 +48,45 @@ function StatusBadge({ type, text }) {
   )
 }
 
-export default function SettingsPage({ enabledPages, onEnabledPagesChange, onTabChange }) {
+const THEMES = [
+  { id: 'slate',    name: 'Slate',    desc: 'Default dark blue',      swatch: ['#0f172a', '#1e293b', '#3b82f6'] },
+  { id: 'midnight', name: 'Midnight', desc: 'Deep purple dark',       swatch: ['#0a0a14', '#1c1233', '#a78bfa'] },
+  { id: 'claude',   name: 'Claude',   desc: 'Warm paper, coral accent', swatch: ['#faf9f5', '#f0ece1', '#d97757'] },
+]
+
+function ThemePicker({ theme, onThemeChange }) {
+  const current = theme === 'dark' ? 'slate' : theme === 'light' ? 'claude' : theme
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {THEMES.map((t) => {
+        const active = current === t.id
+        return (
+          <button key={t.id} onClick={() => onThemeChange(t.id)}
+            className={`rounded-xl border p-3 text-left transition-all ${
+              active ? 'border-blue-500/60 bg-blue-500/10 ring-1 ring-blue-500/30' : 'border-white/10 bg-white/5 hover:border-white/25'
+            }`}>
+            <div className="mb-2 flex gap-1">
+              {t.swatch.map((c, i) => (
+                <span key={i} className="h-6 flex-1 rounded" style={{ backgroundColor: c }} />
+              ))}
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-200">{t.name}</p>
+              {active && (
+                <svg className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500">{t.desc}</p>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+export default function SettingsPage({ enabledPages, onEnabledPagesChange, onTabChange, theme, onThemeChange }) {
   const [adminToken, setAdminToken] = useLocalStorage(ADMIN_TOKEN_KEY, '')
   const [backups, setBackups] = useState([])
   const [status, setStatus] = useState(null) // { type, text }
@@ -192,6 +230,15 @@ export default function SettingsPage({ enabledPages, onEnabledPagesChange, onTab
           {status.text}
         </div>
       )}
+
+      {/* Appearance */}
+      <Section title="Appearance" icon={
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.07-7.07l-1.41 1.41M6.34 17.66l-1.41 1.41m12.73 0l-1.41-1.41M6.34 6.34L4.93 4.93"/>
+        </svg>
+      }>
+        <ThemePicker theme={theme} onThemeChange={onThemeChange} />
+      </Section>
 
       {/* Pages */}
       <Section title="Pages" icon={

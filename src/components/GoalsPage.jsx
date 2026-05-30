@@ -16,6 +16,7 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
   const { loans, addLoan, updateLoan, deleteLoan, uploadLoanImage } = useLoans()
   const { assets, addAsset, updateAsset, deleteAsset, uploadAssetImage } = useAssets()
   const [showForm, setShowForm] = useState(false)
+  const [showAllGoals, setShowAllGoals] = useState(false)
 
   const handleAddGoal = (data) => {
     addGoal(data)
@@ -68,25 +69,37 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
       )}
 
       {/* Goals grid — active first, completed last */}
-      {goals.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-start">
-          {[
-            ...goals.filter(g => (g.savedAmount || 0) < (g.targetAmount || 1)),
-            ...goals.filter(g => (g.savedAmount || 0) >= (g.targetAmount || 1)),
-          ].map((goal) => (
-            <GoalCard
-              key={goal.id}
-              goal={goal}
-              onDelete={deleteGoal}
-              onUpdate={updateGoal}
-              finalSalary={finalSalary}
-              linkedLoans={loans.filter(l => l.goalId === goal.id)}
-              onAddAsset={addAsset}
-              assets={assets}
-            />
-          ))}
-        </div>
-      )}
+      {goals.length > 0 && (() => {
+        const ordered = [
+          ...goals.filter(g => (g.savedAmount || 0) < (g.targetAmount || 1)),
+          ...goals.filter(g => (g.savedAmount || 0) >= (g.targetAmount || 1)),
+        ]
+        const visible = showAllGoals ? ordered : ordered.slice(0, 3)
+        return (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-start">
+              {visible.map((goal) => (
+                <GoalCard
+                  key={goal.id}
+                  goal={goal}
+                  onDelete={deleteGoal}
+                  onUpdate={updateGoal}
+                  finalSalary={finalSalary}
+                  linkedLoans={loans.filter(l => l.goalId === goal.id)}
+                  onAddAsset={addAsset}
+                  assets={assets}
+                />
+              ))}
+            </div>
+            {ordered.length > 3 && (
+              <button onClick={() => setShowAllGoals(v => !v)}
+                className="mt-3 w-full rounded-xl border border-white/10 py-2 text-sm text-slate-400 transition-colors hover:border-white/20 hover:text-white">
+                {showAllGoals ? '▲ Show less' : `▼ Show ${ordered.length - 3} more goal${ordered.length - 3 !== 1 ? 's' : ''}`}
+              </button>
+            )}
+          </>
+        )
+      })()}
 
       {/* Owned Items / Assets */}
       <AssetsSection

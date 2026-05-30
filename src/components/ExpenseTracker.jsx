@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useExpenses } from '../hooks/useExpenses'
 import { useBudgets } from '../hooks/useBudgets'
+import ReceiptScanner from './ReceiptScanner'
 
 const CATEGORIES = [
   'Housing', 'Food', 'Transport', 'Subscriptions', 'Trips',
@@ -215,6 +216,8 @@ export default function ExpenseTracker({ finalSalary = 0, loans = [] }) {
   const { expenses, addExpense, updateExpense, deleteExpense, populateRecurring } = useExpenses()
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
+  const [dismissedRecurring, setDismissedRecurring] = useState([])
+  const [showScanner, setShowScanner] = useState(false)
   const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7))
   const { getBudget, setBudget } = useBudgets(filterMonth)
   const [view, setView] = useState('log')   // 'log' | 'budget' | 'chart'
@@ -244,6 +247,23 @@ export default function ExpenseTracker({ finalSalary = 0, loans = [] }) {
   [filtered, getBudget])
 
   const withSpend = byCategory.filter((x) => x.spent > 0)
+
+  // ── Recurring detection: same name across 2+ distinct months, not yet recurring ──
+  const recurringSuggestions = useMemo(() => {
+    const byName = {}
+    expenses.forEach((e) => {
+      const key = e.name.toLowerCase().trim()
+      if (!byName[key]) byName[key] = { name: e.name, months: new Set(), anyRecurring: false, currentEntry: null }
+      byName[key].months.add(e.month)
+      if (e.recurring) byName[key].anyRecurring = true
+      if (e.month === filterMonth && !e.recurring) byName[key].currentEntry = e
+    })
+    return Object.values(byName)
+      .filter((g) => g.months.size >= 2 && !g.anyRecurring && g.currentEntry)
+      .map((g) => g.currentEntry)
+  }, [expenses, filterMonth])
+
+  const visibleSuggestions = recurringSuggestions.filter((e) => !dismissedRecurring.includes(e.id))
 
   const handleAdd = (ev) => {
     ev.preventDefault()
@@ -378,6 +398,35 @@ export default function ExpenseTracker({ finalSalary = 0, loans = [] }) {
                 <div className="h-full rounded-full bg-slate-400 transition-all"
                   style={{ width: `${(today.getDate() / daysInMonth) * 100}%` }} />
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Recurring suggestions ── */}
+        {visibleSuggestions.length > 0 && (
+          <div className="mb-5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <svg className="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 11-6.219-8.56M21 3v6h-6"/>
+              </svg>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-400">Looks recurring</p>
+            </div>
+            <div className="space-y-1.5">
+              {visibleSuggestions.slice(0, 4).map((e) => (
+                <div key={e.id} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+                  <span className="text-xs text-slate-300">
+                    <span className="font-semibold text-slate-200">{e.name}</span> appears in multiple months
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={() => updateExpense(e.id, { recurring: true })}
+                      className="rounded-lg bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-500">
+                      Mark recurring
+                    </button>
+                    <button onClick={() => setDismissedRecurring((p) => [...p, e.id])}
+                      className="text-slate-500 hover:text-white text-xs px-1">✕</button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

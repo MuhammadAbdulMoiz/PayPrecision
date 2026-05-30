@@ -134,8 +134,14 @@ export default function App() {
   }, [isValid, income, dollarRate, workingDays, extraDays, leaveDays, bonusAmount, employeeType])
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-    document.documentElement.classList.toggle('light', theme === 'light')
+    // Migrate legacy values
+    const t = theme === 'dark' ? 'slate' : theme === 'light' ? 'claude' : theme
+    const isLight = t === 'claude'
+    const root = document.documentElement
+    root.classList.toggle('dark', !isLight)
+    root.classList.toggle('light', isLight)
+    root.classList.remove('theme-slate', 'theme-midnight', 'theme-claude')
+    root.classList.add(`theme-${t}`)
   }, [theme])
 
   const handleEmployeeTypeChange = useCallback((type) => {
@@ -145,7 +151,11 @@ export default function App() {
   }, [setEmployeeType, setIncome])
 
   const handleThemeToggle = useCallback(() => {
-    setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
+    const order = ['slate', 'midnight', 'claude']
+    setTheme((t) => {
+      const cur = t === 'dark' ? 'slate' : t === 'light' ? 'claude' : t
+      return order[(order.indexOf(cur) + 1) % order.length]
+    })
   }, [setTheme])
 
   const handleCurrencyToggle = useCallback(() => {
@@ -202,12 +212,12 @@ export default function App() {
   const parsedDollarRate = parsedRate
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0f172a] to-[#1e293b] transition-colors light:from-[#f0f4ff] light:to-[#e2e8f0]">
+    <div className="app-shell transition-colors">
       <div className="mx-auto max-w-5xl">
         <Header
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          isDark={theme === 'dark'}
+          isDark={theme !== 'claude' && theme !== 'light'}
           onThemeToggle={handleThemeToggle}
           enabledPages={enabledPages}
         />
@@ -399,6 +409,8 @@ export default function App() {
               enabledPages={enabledPages}
               onEnabledPagesChange={setEnabledPages}
               onTabChange={setActiveTab}
+              theme={theme}
+              onThemeChange={setTheme}
             />
           </main>
         )}
