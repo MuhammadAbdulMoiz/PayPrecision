@@ -24,6 +24,8 @@ app.use('/api/budgets',  require('./routes/budgets')(DB_PATH))
 app.use('/api/images',          require('./routes/images')(DB_PATH))
 app.use('/api/reimbursements',  require('./routes/reimbursements')(DB_PATH))
 app.use('/api/loans',           require('./routes/loans')(DB_PATH))
+app.use('/api/assets',          require('./routes/assets')(DB_PATH))
+app.use('/api/certifications',  require('./routes/certifications')(DB_PATH))
 
 // In production, serve the built frontend
 if (process.env.NODE_ENV === 'production') {

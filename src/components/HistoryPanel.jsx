@@ -22,8 +22,12 @@ function invId(iso, idx) {
   return `#PP-${y}-${m}-${String(idx + 1).padStart(2, '0')}`
 }
 
+function totalFor(e) {
+  return e.results.totalEarnings ?? e.results.finalSalary ?? 0
+}
+
 function downloadCSV(entries) {
-  const headers = ['Invoice ID', 'Date', 'Base Salary (PKR)', 'Extra Pay (PKR)', 'Leave Deduction (PKR)', 'Attendance Bonus (PKR)', 'Provident Fund (PKR)', 'Final Salary (PKR)']
+  const headers = ['Invoice ID', 'Date', 'Base Salary (PKR)', 'Extra Pay (PKR)', 'Leave Deduction (PKR)', 'Attendance Bonus (PKR)', 'Provident Fund (PKR)', 'Reimbursements (PKR)', 'Annual Bonus (PKR)', 'Total Earnings (PKR)']
   const rows = entries.map((e, idx) => [
     invId(e.date, idx),
     formatDate(e.date),
@@ -32,7 +36,9 @@ function downloadCSV(entries) {
     (e.results.leaveDeduction || 0).toFixed(2),
     (e.results.attendanceBonus || 0).toFixed(2),
     (e.results.providentFund || 0).toFixed(2),
-    (e.results.finalSalary || 0).toFixed(2),
+    (e.results.reimbursementPKR || 0).toFixed(2),
+    (e.results.annualBonusPKR || 0).toFixed(2),
+    totalFor(e).toFixed(2),
   ])
   const csv = [headers, ...rows].map((r) => r.join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
@@ -49,7 +55,7 @@ function SalaryChart({ entries }) {
   if (entries.length < 2) return null
 
   const sorted = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(-12)
-  const salaries = sorted.map((e) => e.results.finalSalary || 0)
+  const salaries = sorted.map((e) => totalFor(e))
   const min = Math.min(...salaries)
   const max = Math.max(...salaries)
   const range = max - min || 1
@@ -276,9 +282,16 @@ export default function HistoryPanel({ entries, onClear, onDelete, onDownloadRep
                     </div>
                   </div>
 
-                  <p className="text-base font-semibold tabular-nums text-slate-100 light:text-slate-800">
-                    {formatPKR(entry.results.finalSalary)}
-                  </p>
+                  <div>
+                    <p className="text-base font-semibold tabular-nums text-slate-100 light:text-slate-800">
+                      {formatPKR(totalFor(entry))}
+                    </p>
+                    {(entry.results.reimbursementPKR || entry.results.annualBonusPKR) && (
+                      <p className="text-[10px] text-slate-500">
+                        Base {formatPKR(entry.results.finalSalary)}
+                      </p>
+                    )}
+                  </div>
 
                   <span className="inline-flex w-fit items-center rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-400">
                     SAVED

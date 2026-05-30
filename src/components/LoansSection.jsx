@@ -174,6 +174,64 @@ export default function LoansSection({ goals = [], loans = [], onAdd, onUpdate, 
         </button>
       </div>
 
+      {/* Overview card */}
+      {(() => {
+        const totalBorrowed  = loans.reduce((s, l) => s + l.amount, 0)
+        const totalRepaid    = loans.reduce((s, l) => s + (l.totalPaid || 0), 0)
+        const totalOutstanding = activeLoans.reduce((s, l) => s + (l.remaining || 0), 0)
+        const pctRepaid = totalBorrowed > 0 ? Math.round((totalRepaid / totalBorrowed) * 100) : 0
+        const paidLoans = loans.filter(l => l.status === 'paid')
+        return (
+          <div className="glass rounded-2xl p-4 mb-2">
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10">
+                  <svg className="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Borrowed</p>
+                  <p className="text-sm font-bold text-white tabular-nums">PKR {fmtPKR(totalBorrowed)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15">
+                  <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Repaid</p>
+                  <p className="text-sm font-bold text-emerald-400 tabular-nums">PKR {fmtPKR(totalRepaid)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500/15">
+                  <svg className="h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Outstanding</p>
+                  <p className="text-sm font-bold text-red-400 tabular-nums">PKR {fmtPKR(totalOutstanding)}</p>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px] text-slate-500">
+                <span>{pctRepaid}% repaid overall</span>
+                <span>{activeLoans.length} active · {paidLoans.length} paid off</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-blue-500 transition-all duration-700"
+                  style={{ width: `${pctRepaid}%` }} />
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-start">
         {loans.map(loan => (
           <LoanCard

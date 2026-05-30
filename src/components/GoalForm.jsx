@@ -4,9 +4,30 @@ function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 }
 
+const GOAL_CATEGORIES = [
+  { value: 'Purchase',       label: 'Purchase',        physical: true  },
+  { value: 'Electronics',    label: 'Electronics',     physical: true  },
+  { value: 'Furniture',      label: 'Furniture',       physical: true  },
+  { value: 'Vehicle',        label: 'Vehicle',         physical: true  },
+  { value: 'Appliance',      label: 'Appliance',       physical: true  },
+  { value: 'Trip',           label: 'Trip / Travel',   physical: false },
+  { value: 'Experience',     label: 'Experience',      physical: false },
+  { value: 'Education',      label: 'Education',       physical: false },
+  { value: 'Emergency Fund', label: 'Emergency Fund',  physical: false },
+  { value: 'Savings',        label: 'Savings',         physical: false },
+  { value: 'Other',          label: 'Other',           physical: false },
+]
+
+export const PHYSICAL_GOAL_CATEGORIES = new Set(
+  GOAL_CATEGORIES.filter(c => c.physical).map(c => c.value)
+)
+
+export { GOAL_CATEGORIES }
+
 export default function GoalForm({ onSubmit, onClose }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [category, setCategory] = useState('Purchase')
   const [targetAmount, setTargetAmount] = useState('')
   const [savedAmount, setSavedAmount] = useState('0')
   const [imageDataUrl, setImageDataUrl] = useState(null)
@@ -42,6 +63,7 @@ export default function GoalForm({ onSubmit, onClose }) {
         id,
         name: name.trim(),
         description: description.trim(),
+        category,
         targetAmount: parseFloat(targetAmount),
         savedAmount: parseFloat(savedAmount) || 0,
         hasImage: !!imageDataUrl,
@@ -111,6 +133,30 @@ export default function GoalForm({ onSubmit, onClose }) {
               required
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50 focus:bg-white/10 transition-colors"
             />
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Category <span className="text-red-400">*</span>
+            </label>
+            <select value={category} onChange={e => setCategory(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-[#1e293b] px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500/50">
+              <optgroup label="Physical Items (can be added to Owned Items)">
+                {GOAL_CATEGORIES.filter(c => c.physical).map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Non-Physical">
+                {GOAL_CATEGORIES.filter(c => !c.physical).map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </optgroup>
+            </select>
+            {PHYSICAL_GOAL_CATEGORIES.has(category)
+              ? <p className="mt-1 text-[11px] text-teal-400">Physical item — can be logged to Owned Items when complete</p>
+              : <p className="mt-1 text-[11px] text-slate-500">Non-physical — won&apos;t appear in Owned Items</p>
+            }
           </div>
 
           {/* Target amount */}

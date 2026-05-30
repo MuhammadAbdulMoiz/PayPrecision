@@ -33,6 +33,7 @@ function initSchema(db) {
       saved_amount  REAL NOT NULL DEFAULT 0,
       has_image     INTEGER NOT NULL DEFAULT 0,
       savings_rate  REAL NOT NULL DEFAULT 0.10,
+      category      TEXT NOT NULL DEFAULT 'Other',
       created_at    TEXT DEFAULT (datetime('now')),
       updated_at    TEXT DEFAULT (datetime('now'))
     );
@@ -117,12 +118,38 @@ function initSchema(db) {
       note         TEXT DEFAULT '',
       created_at   TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS assets (
+      id             TEXT PRIMARY KEY,
+      name           TEXT NOT NULL,
+      category       TEXT NOT NULL DEFAULT 'Other',
+      purchase_price REAL NOT NULL DEFAULT 0,
+      current_value  REAL NOT NULL DEFAULT 0,
+      purchase_date  TEXT NOT NULL,
+      goal_id        TEXT DEFAULT NULL,
+      notes          TEXT DEFAULT '',
+      has_image      INTEGER NOT NULL DEFAULT 0,
+      created_at     TEXT DEFAULT (datetime('now')),
+      updated_at     TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS certifications (
+      id             TEXT PRIMARY KEY,
+      name           TEXT NOT NULL,
+      issuer         TEXT NOT NULL DEFAULT '',
+      date_earned    TEXT NOT NULL DEFAULT '',
+      credential_url TEXT DEFAULT '',
+      notes          TEXT DEFAULT '',
+      created_at     TEXT DEFAULT (datetime('now'))
+    );
   `)
 
   // Migrations — add new columns if they don't exist yet
   try { db.exec('ALTER TABLE expenses ADD COLUMN recurring INTEGER NOT NULL DEFAULT 0') } catch (_) {}
   try { db.exec('ALTER TABLE goals ADD COLUMN savings_rate REAL NOT NULL DEFAULT 0.10') } catch (_) {}
   try { db.exec('ALTER TABLE laptop_reimbursements ADD COLUMN applied INTEGER NOT NULL DEFAULT 1') } catch (_) {}
+  try { db.exec('ALTER TABLE assets ADD COLUMN goal_id TEXT DEFAULT NULL') } catch (_) {}
+  try { db.exec("ALTER TABLE goals ADD COLUMN category TEXT NOT NULL DEFAULT 'Other'") } catch (_) {}
 }
 
 function _reset() { _db = null }

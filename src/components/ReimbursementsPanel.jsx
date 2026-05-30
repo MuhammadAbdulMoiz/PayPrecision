@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -300,7 +301,7 @@ export default function ReimbursementsPanel({
   onAddAI, onUpdateAI, onDeleteAI, onUploadAILogo,
   onAddLaptop, onUpdateLaptop, onDeleteLaptop, onUploadLaptopImage,
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useLocalStorage('pp-reimb-open', true)
 
   const appliedAI = aiItems.filter(i => i.applied)
   const appliedLaptops = laptopItems.filter(i => i.applied)

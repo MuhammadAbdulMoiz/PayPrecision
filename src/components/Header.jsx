@@ -40,6 +40,18 @@ export default function Header({ activeTab, onTabChange, isDark, onThemeToggle, 
             Insights
           </button>
         )}
+        {enabledPages?.career && (
+          <button
+            onClick={() => onTabChange('career')}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+              activeTab === 'career'
+                ? 'bg-white/15 text-white shadow-sm light:bg-white light:text-slate-800'
+                : 'text-slate-400 hover:text-slate-200 light:text-slate-500 light:hover:text-slate-700'
+            }`}
+          >
+            Career
+          </button>
+        )}
       </nav>
 
       <div className="flex items-center gap-2">

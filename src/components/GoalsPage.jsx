@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import { useGoals } from '../hooks/useGoals'
 import { useLoans } from '../hooks/useLoans'
+import { useAssets } from '../hooks/useAssets'
 import GoalsDashboard from './GoalsDashboard'
 import GoalCard from './GoalCard'
 import GoalForm from './GoalForm'
 import ExpenseTracker from './ExpenseTracker'
 import LoansSection from './LoansSection'
+import AssetsSection from './AssetsSection'
 
 export default function GoalsPage({ finalSalary }) {
   const { goals, addGoal, updateGoal, deleteGoal } = useGoals()
   const { loans, addLoan, updateLoan, deleteLoan, uploadLoanImage } = useLoans()
+  const { assets, addAsset, updateAsset, deleteAsset, uploadAssetImage } = useAssets()
   const [showForm, setShowForm] = useState(false)
 
   const handleAddGoal = (data) => {
@@ -62,10 +65,13 @@ export default function GoalsPage({ finalSalary }) {
         </div>
       )}
 
-      {/* Goals grid */}
+      {/* Goals grid — active first, completed last */}
       {goals.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-start">
-          {goals.map((goal) => (
+          {[
+            ...goals.filter(g => (g.savedAmount || 0) < (g.targetAmount || 1)),
+            ...goals.filter(g => (g.savedAmount || 0) >= (g.targetAmount || 1)),
+          ].map((goal) => (
             <GoalCard
               key={goal.id}
               goal={goal}
@@ -73,10 +79,21 @@ export default function GoalsPage({ finalSalary }) {
               onUpdate={updateGoal}
               finalSalary={finalSalary}
               linkedLoans={loans.filter(l => l.goalId === goal.id)}
+              onAddAsset={addAsset}
+              assets={assets}
             />
           ))}
         </div>
       )}
+
+      {/* Owned Items / Assets */}
+      <AssetsSection
+        assets={assets}
+        onAdd={addAsset}
+        onUpdate={updateAsset}
+        onDelete={deleteAsset}
+        onUploadImage={uploadAssetImage}
+      />
 
       {/* Loan Tracker */}
       <LoansSection

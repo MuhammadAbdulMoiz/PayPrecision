@@ -1,115 +1,157 @@
-# PayPrecision - Salary Calculator
+# PayPrecision
 
-A production-ready salary calculator built with **React + Vite + Tailwind CSS v4**. Designed with a fintech-inspired dashboard UI featuring glassmorphism styling, dark/light themes, and real-time reactive calculations.
+A self-hosted personal dashboard for fresh graduates and early-career professionals. Tracks salary, finances, owned items, and everything in between — stored locally, no cloud required.
 
-> **Built entirely with [Claude Code](https://claude.ai/claude-code)** - Anthropic's AI coding assistant.
+> Built entirely with [Claude Code](https://claude.ai/claude-code).
+
+---
+
+## What it does
+
+PayPrecision started as a salary calculator for Pakistani employees (USD income → PKR) and grew into a full personal management tool. Everything is manual and deliberate — you record what matters, the app shows you the picture.
+
+---
 
 ## Features
 
-- **Real-time salary calculation** - No "Calculate" button; results update reactively as you type
-- **Overtime & leave offset logic** - Leave days offset extra working days; remaining extras paid at 1.5x overtime
-- **Perfect attendance bonuses** - Multi-selectable toggles: 1 month (PKR 4,000), 3 months (PKR 10,000), 6 months (PKR 20,000)
-- **Dynamic working days** - Auto-calculate weekdays in any month with public holiday subtraction
-- **Invoice download** - Generate and download salary invoices as PDF
-- **Annual revenue report** - Download yearly earnings summary
-- **Earnings history** - Track and browse past calculations with localStorage persistence
-- **Dark/Light theme** - Toggle with persistence across sessions
-- **Glassmorphism UI** - Frosted glass cards, gradient backgrounds, smooth transitions
-- **Formula breakdown panel** - Visual formula display with Base Sum, Adjustments, and Net Effect
-- **Fully accessible** - WCAG AA compliant, keyboard navigable, screen-reader friendly
-- **Copy to clipboard** - One-click copy of final salary
-- **Reset to defaults** - Clear all inputs and localStorage
+### Salary Calculator
+- USD → PKR with configurable exchange rate
+- Intern and full-time modes
+- Dynamic working days (public holidays, leave days, extra/overtime days)
+- Overtime at 1.5× rate, leave deductions, leave-extra offset logic
+- Attendance bonuses (1-month / 3-month / 6-month tiers)
+- Provident fund deduction (full-time only)
+- Annual bonus (fixed amount or % of salary)
+- Income tax estimate (FY 2024-25 salaried brackets, Pakistan)
+- Real-time reactive calculations — no Calculate button needed
+- PDF invoice export, annual report PDF, CSV history export
+
+### Reimbursements
+- AI subscription reimbursements with per-provider logos
+- Laptop installment tracker (36-month plan, progress and remaining balance)
+
+### Financial Goals
+- Set savings targets with per-goal savings rates (5%–30% of salary)
+- Log monthly deposits per goal
+- Time-to-completion estimate based on current salary
+- Progress bars and optional goal images
+
+### Owned Items (Physical Assets)
+- Log anything you own: monitor, phone, chair, keyboard, vehicle, etc.
+- Categories: Electronics, Furniture, Vehicle, Appliances, Tools, Other
+- Record purchase price and manually set current estimated value
+- Shows appreciation / depreciation vs what you originally paid
+- Photo upload per item
+- All items count toward your net worth
+
+### Loan Tracker
+- Track borrowed money (family, friends, banks)
+- Log payments, see remaining balance and repayment progress
+- Link loans to specific goals
+- Progress bar showing % repaid
+
+### Expense Tracker
+- 11 spending categories (Housing, Food, Transport, Subscriptions, Trips, Treats, Utilities, Healthcare, Education, Shopping, Other)
+- Monthly budgets per category with circular progress indicators
+- Mark expenses as recurring (auto-fills next month)
+- Spending donut chart and horizontal bar chart
+- Expense health indicator: spending vs salary (Healthy / Caution / Over budget)
+- CSV export
+
+### Insights
+- 6-month expense trend by category (selectable)
+- Salary growth chart (last 12 history entries)
+- Net worth = goal savings + owned item values − loans − manual liabilities
+- Manual liability management with payment tracking
+
+### History
+- Save salary calculations to history with full parameter snapshot
+- Search, filter by month/year, delete entries
+- Salary projection line chart
+
+### Settings
+- Show/hide pages (History, Goals, Insights)
+- Database backup, restore, and import
+- Dark/light theme
+
+---
 
 ## Tech Stack
 
-| Technology | Purpose |
+| Layer | Details |
 |---|---|
-| React 19 | UI framework |
-| Vite 8 | Build tool & dev server |
-| Tailwind CSS v4 | Utility-first styling |
-| localStorage | State persistence |
+| Frontend | React 19, Tailwind CSS v4, Vite 8 |
+| Backend | Node.js + Express |
+| Database | SQLite via `node:sqlite` (built-in, no ORM, WAL mode) |
+| Images | Base64 → disk, served as static files from `/db/images/` |
+| Container | Podman / Docker (multi-stage build) |
 
-## Getting Started
+No external database, no cloud, no auth. Runs entirely on your machine.
 
-### Prerequisites
-- Node.js v18+ and npm
+---
 
-### Installation
+## Running with Podman
+
+**Build:**
+```bash
+podman build -t payprecision .
+```
+
+**Run:**
+```bash
+podman run -d \
+  --name payprecision \
+  -p 3000:3000 \
+  -v payprecision-db:/db \
+  localhost/payprecision:latest
+```
+
+**Update to latest build:**
+```bash
+podman build -t payprecision .
+podman stop payprecision && podman rm payprecision
+podman run -d --name payprecision -p 3000:3000 -v payprecision-db:/db localhost/payprecision:latest
+```
+
+Open at [http://localhost:3000](http://localhost:3000).
+
+The `payprecision-db` volume holds the SQLite database and all uploaded images. It persists across container restarts and rebuilds.
+
+---
+
+## Running in Dev Mode
 
 ```bash
-git clone https://github.com/MuhammadAbdulMoiz/PayPrecision.git
-cd PayPrecision
+# Terminal 1 — frontend
 npm install
-```
-
-### Development
-
-```bash
 npm run dev
+
+# Terminal 2 — backend
+cd server
+npm install
+node index.js
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+Frontend at [http://localhost:5173](http://localhost:5173), backend at port 3001.
 
-### Windows Background Server
+---
 
-Double-click `server.bat` or run it from terminal - it toggles the dev server on/off:
-- First run: starts the Vite dev server in the background
-- Second run: stops it
+## Data & Privacy
 
-### Build for Production
+Everything is stored in a single SQLite file inside the named Podman volume. Nothing leaves your machine. The Settings page has full backup, restore, and database export tools.
 
-```bash
-npm run build
-npm run preview
-```
+---
 
 ## Calculation Logic
 
 ```
-monthlyPKR     = income * dollarRate
-dailyWage      = monthlyPKR / workingDays
+monthlyPKR     = income × dollarRate
+dailyWage      = monthlyPKR ÷ workingDays
+overtimeRate   = dailyWage × 1.5
 offsetDays     = min(leaveDays, extraDays)
-overtimeDays   = extraDays - offsetDays
-unpaidLeave    = leaveDays - offsetDays
-extraPay       = overtimeDays * dailyWage * 1.5
-leaveDeduction = unpaidLeave * dailyWage
-finalSalary    = monthlyPKR + extraPay - leaveDeduction + attendanceBonus
+overtimeDays   = extraDays − offsetDays
+unpaidLeave    = leaveDays − offsetDays
+extraPay       = overtimeDays × overtimeRate
+leaveDeduction = unpaidLeave × dailyWage
+finalSalary    = monthlyPKR + extraPay − leaveDeduction + attendanceBonus − providentFund
 ```
-
-## Project Structure
-
-```
-src/
-├── App.jsx                    # Root component with all state and layout
-├── components/
-│   ├── BaseParameters.jsx     # Working days, income, dollar rate inputs
-│   ├── BottomNav.jsx          # Dashboard / History tab navigation
-│   ├── FormulaPanel.jsx       # Expandable formula breakdown
-│   ├── Header.jsx             # App header with theme toggle
-│   ├── HistoryPanel.jsx       # Earnings history list
-│   ├── InputField.jsx         # Reusable number input with validation
-│   ├── ResultCard.jsx         # Single result display card
-│   ├── ResultsPanel.jsx       # All results container
-│   ├── SelectField.jsx        # Reusable select dropdown
-│   ├── SummaryCard.jsx        # Summary dashboard card
-│   ├── ToggleSwitch.jsx       # Theme toggle switch
-│   ├── VariablesAdjustments.jsx # Extra days, leave days, attendance
-│   ├── WageArchitecture.jsx   # Wage breakdown display
-│   └── MonthPicker.jsx        # Month selector for dynamic mode
-├── hooks/
-│   ├── useHistory.js          # Earnings history with localStorage
-│   ├── useLocalStorage.js     # useState + localStorage sync
-│   └── useWorkingDays.js      # Weekday counter for dynamic mode
-└── utils/
-    ├── calculate.js           # Pure salary calculation functions
-    ├── format.js              # PKR currency formatter
-    └── pdf.js                 # Invoice & report PDF generation
-```
-
-## License
-
-MIT
-
----
-
-*This project was built with [Claude Code](https://claude.ai/claude-code) by Anthropic.*

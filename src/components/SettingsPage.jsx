@@ -219,6 +219,12 @@ export default function SettingsPage({ enabledPages, onEnabledPagesChange, onTab
             checked={!!enabledPages?.insights}
             onChange={(v) => { setPage('insights', v); if (v) onTabChange('insights') }}
           />
+          <Toggle
+            label="Career"
+            description="GitHub projects and certifications tracker"
+            checked={!!enabledPages?.career}
+            onChange={(v) => { setPage('career', v); if (v) onTabChange('career') }}
+          />
         </div>
       </Section>
 

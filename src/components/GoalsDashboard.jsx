@@ -11,8 +11,11 @@ export default function GoalsDashboard({ goals, finalSalary }) {
   const totalRemaining = Math.max(totalTarget - totalSaved, 0)
   const overallPct  = totalTarget > 0 ? Math.min(totalSaved / totalTarget, 1) : 0
 
-  // Total savings rate = sum of each goal's individual rate
-  const totalSavingsRate = goals.reduce((s, g) => s + (g.savingsRate || 0.10), 0)
+  const activeGoals    = goals.filter(g => (g.savedAmount || 0) < (g.targetAmount || 1))
+  const completedGoals = goals.filter(g => (g.savedAmount || 0) >= (g.targetAmount || 1))
+
+  // Only sum active goals — completed goals no longer need saving toward
+  const totalSavingsRate  = activeGoals.reduce((s, g) => s + (g.savingsRate || 0.10), 0)
   const totalMonthlySaved = (finalSalary || 0) * totalSavingsRate
 
   // SVG donut
@@ -71,9 +74,9 @@ export default function GoalsDashboard({ goals, finalSalary }) {
             ))}
           </div>
 
-          {/* Per-goal mini bars */}
+          {/* Per-goal mini bars — active only */}
           <div className="space-y-2">
-            {goals.map((g) => {
+            {activeGoals.map((g) => {
               const pct = g.targetAmount > 0 ? Math.min((g.savedAmount / g.targetAmount) * 100, 100) : 0
               return (
                 <div key={g.id}>
@@ -92,9 +95,14 @@ export default function GoalsDashboard({ goals, finalSalary }) {
                 </div>
               )
             })}
+            {completedGoals.length > 0 && (
+              <p className="text-[10px] text-slate-600">
+                + {completedGoals.length} completed goal{completedGoals.length !== 1 ? 's' : ''} not included in rate
+              </p>
+            )}
           </div>
 
-          {/* Combined savings rate summary */}
+          {/* Combined savings rate summary — active goals only */}
           <div className="rounded-xl bg-white/5 p-3">
             <div className="flex items-center justify-between mb-1">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
@@ -108,11 +116,15 @@ export default function GoalsDashboard({ goals, finalSalary }) {
               <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-500"
                 style={{ width: `${Math.min(totalSavingsRate * 100, 100)}%` }} />
             </div>
-            <p className="mt-1.5 text-[10px] text-slate-500">
-              {goals.map((g) => `${g.name} ${Math.round((g.savingsRate || 0.10) * 100)}%`).join(' + ')}
-              {' = '}
-              <span className="text-blue-400">~PKR {fmtPKR(totalMonthlySaved)} / month</span>
-            </p>
+            {activeGoals.length > 0 ? (
+              <p className="mt-1.5 text-[10px] text-slate-500">
+                {activeGoals.map((g) => `${g.name} ${Math.round((g.savingsRate || 0.10) * 100)}%`).join(' + ')}
+                {' = '}
+                <span className="text-blue-400">~PKR {fmtPKR(totalMonthlySaved)} / month</span>
+              </p>
+            ) : (
+              <p className="mt-1.5 text-[10px] text-emerald-500">All goals completed!</p>
+            )}
           </div>
         </div>
       </div>

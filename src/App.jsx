@@ -21,6 +21,7 @@ import GoalsPage from './components/GoalsPage'
 import InsightsPage from './components/InsightsPage'
 import SettingsPage from './components/SettingsPage'
 import ReimbursementsPanel from './components/ReimbursementsPanel'
+import CareerPage from './components/CareerPage'
 
 const DEFAULTS = {
   employeeType: 'intern',
@@ -85,7 +86,7 @@ export default function App() {
   const [globalCurrency, setGlobalCurrency] = useLocalStorage('pp-currency', 'PKR')
   const [bonus1Month, setBonus1Month] = useLocalStorage('pp-bonus1m', 4000)
   const [bonus1MonthCurrency, setBonus1MonthCurrency] = useLocalStorage('pp-bonus1m-cur', 'PKR')
-  const [enabledPages, setEnabledPages] = useLocalStorage('pp-pages', { history: true, goals: true, insights: false })
+  const [enabledPages, setEnabledPages] = useLocalStorage('pp-pages', { history: true, goals: true, insights: false, career: false })
   const [annualBonus, setAnnualBonus] = useLocalStorage('pp-annual-bonus', '')
   const [annualBonusCurrency, setAnnualBonusCurrency] = useLocalStorage('pp-annual-bonus-cur', 'PKR')
   const [annualBonusMode, setAnnualBonusMode] = useLocalStorage('pp-annual-bonus-mode', 'fixed')
@@ -193,9 +194,9 @@ export default function App() {
     if (!isValid) return
     addEntry(
       { employeeType, income, dollarRate, workingDays, extraDays, leaveDays, attendanceBonus: bonusAmount },
-      results,
+      { ...results, reimbursementPKR, annualBonusPKR, totalEarnings },
     )
-  }, [isValid, addEntry, employeeType, income, dollarRate, workingDays, extraDays, leaveDays, bonusAmount, results])
+  }, [isValid, addEntry, employeeType, income, dollarRate, workingDays, extraDays, leaveDays, bonusAmount, results, reimbursementPKR, annualBonusPKR, totalEarnings])
 
   const parsedDollarRate = parsedRate
 
@@ -379,6 +380,12 @@ export default function App() {
         {activeTab === 'insights' && enabledPages?.insights && (
           <main className="px-6 pb-8">
             <InsightsPage entries={entries} finalSalary={results.finalSalary} />
+          </main>
+        )}
+
+        {activeTab === 'career' && enabledPages?.career && (
+          <main className="px-6 pb-8">
+            <CareerPage />
           </main>
         )}
 
