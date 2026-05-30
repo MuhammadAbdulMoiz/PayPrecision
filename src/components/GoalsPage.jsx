@@ -8,8 +8,9 @@ import GoalForm from './GoalForm'
 import ExpenseTracker from './ExpenseTracker'
 import LoansSection from './LoansSection'
 import AssetsSection from './AssetsSection'
+import AffordabilityTool from './AffordabilityTool'
 
-export default function GoalsPage({ finalSalary }) {
+export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
   const { goals, addGoal, updateGoal, deleteGoal } = useGoals()
   const { loans, addLoan, updateLoan, deleteLoan, uploadLoanImage } = useLoans()
   const { assets, addAsset, updateAsset, deleteAsset, uploadAssetImage } = useAssets()
@@ -103,6 +104,14 @@ export default function GoalsPage({ finalSalary }) {
         onUpdate={updateLoan}
         onDelete={deleteLoan}
         onUploadImage={uploadLoanImage}
+      />
+
+      {/* Affordability Tool */}
+      <AffordabilityTool
+        finalSalary={finalSalary}
+        dailyWage={dailyWage}
+        goals={goals}
+        totalAvailable={finalSalary + loans.filter(l => l.status !== 'paid' && (l.currency === 'PKR' || !l.currency)).reduce((s, l) => s + (l.remaining || 0), 0)}
       />
 
       {/* Expense Tracker */}

@@ -22,6 +22,7 @@ import InsightsPage from './components/InsightsPage'
 import SettingsPage from './components/SettingsPage'
 import ReimbursementsPanel from './components/ReimbursementsPanel'
 import CareerPage from './components/CareerPage'
+import WorkToEarnTool from './components/WorkToEarnTool'
 
 const DEFAULTS = {
   employeeType: 'intern',
@@ -348,6 +349,8 @@ export default function App() {
               annualBonusValue={annualBonus}
             />
 
+            <WorkToEarnTool dailyWage={results.dailyWage} />
+
             <div className="flex items-center gap-2 rounded-xl bg-blue-500/10 p-3">
               <svg className="h-4 w-4 shrink-0 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
@@ -374,7 +377,7 @@ export default function App() {
 
         {activeTab === 'goals' && (
           <main className="px-6 pb-8">
-            <GoalsPage finalSalary={results.finalSalary} />
+            <GoalsPage finalSalary={results.finalSalary} dailyWage={results.dailyWage} />
           </main>
         )}
 

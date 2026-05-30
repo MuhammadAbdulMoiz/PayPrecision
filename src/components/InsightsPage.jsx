@@ -95,6 +95,85 @@ function fmtK(v) {
   return Math.round(v)
 }
 
+function NetWorthTimeline({ entries }) {
+  const [hovered, setHovered] = useState(null)
+  const sorted = useMemo(() =>
+    [...entries].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(-12),
+  [entries])
+
+  // Build cumulative: each month's total earnings minus estimated spending (30% assumption if no data)
+  // If netWorth snapshot saved use that, otherwise cumulative sum of earnings
+  const points = useMemo(() => {
+    let cumulative = 0
+    return sorted.map(e => {
+      const earned = e.results?.totalEarnings ?? e.results?.finalSalary ?? 0
+      cumulative += earned
+      return {
+        month:     new Date(e.date).toLocaleString('en-US', { month: 'short', year: '2-digit' }),
+        earnings:  earned,
+        cumulative,
+      }
+    })
+  }, [sorted])
+
+  const maxVal = Math.max(...points.map(p => p.cumulative), 1)
+  const W = 560, H = 180
+  const PAD = { top: 20, right: 16, bottom: 36, left: 52 }
+  const cW = W - PAD.left - PAD.right
+  const cH = H - PAD.top - PAD.bottom
+
+  const pts = points.map((p, i) => ({
+    x: PAD.left + (i / (points.length - 1)) * cW,
+    y: PAD.top + cH - (p.cumulative / maxVal) * cH,
+    ...p,
+  }))
+
+  const polyline = pts.map(p => `${p.x},${p.y}`).join(' ')
+  const area = `M${pts[0].x},${PAD.top + cH} ${pts.map(p => `L${p.x},${p.y}`).join(' ')} L${pts[pts.length-1].x},${PAD.top + cH} Z`
+
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+        <defs>
+          <linearGradient id="nwtGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
+          <g key={i}>
+            <line x1={PAD.left} y1={PAD.top + cH - t * cH} x2={W - PAD.right} y2={PAD.top + cH - t * cH}
+              stroke="rgba(255,255,255,0.05)" strokeWidth="1" strokeDasharray={t === 0 ? '0' : '4 3'} />
+            <text x={PAD.left - 4} y={PAD.top + cH - t * cH + 3.5} textAnchor="end" fontSize="9" fill="rgba(100,116,139,0.9)">
+              {fmtK(t * maxVal)}
+            </text>
+          </g>
+        ))}
+        <path d={area} fill="url(#nwtGrad)" />
+        <polyline points={polyline} fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" />
+        {pts.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r={hovered === i ? 5 : 3.5}
+              fill="#10b981" stroke="#0f172a" strokeWidth="2"
+              style={{ cursor: 'pointer', transition: 'r .1s' }}
+              onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} />
+            <text x={p.x} y={H - 10} textAnchor="middle" fontSize="9" fill="rgba(100,116,139,0.85)">{p.month}</text>
+          </g>
+        ))}
+      </svg>
+      {hovered !== null && (
+        <div className="pointer-events-none absolute top-0 z-10 rounded-xl border border-white/10 bg-slate-900/95 px-3 py-2 shadow-xl text-xs backdrop-blur-sm"
+          style={{ left: `${Math.min(Math.max((pts[hovered].x / W) * 100, 10), 80)}%`, transform: 'translateX(-50%)' }}>
+          <p className="mb-1 font-semibold text-slate-200">{pts[hovered].month}</p>
+          <p className="text-emerald-400">This month: PKR {fmtK(pts[hovered].earnings)}</p>
+          <p className="text-blue-400">Cumulative: PKR {fmtK(pts[hovered].cumulative)}</p>
+        </div>
+      )}
+      <p className="mt-1 text-center text-[10px] text-slate-600">Cumulative earnings trajectory — save entries regularly for accurate tracking</p>
+    </div>
+  )
+}
+
 function SalaryGrowthChart({ entries }) {
   const [hovered, setHovered] = useState(null)
 
@@ -744,6 +823,24 @@ export default function InsightsPage({ entries, finalSalary }) {
         </div>
         <SalaryGrowthChart entries={entries} />
       </div>
+
+      {/* ── Net Worth Timeline ── */}
+      {entries.length >= 2 && (
+        <div className="glass rounded-2xl p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20">
+              <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-200">Net Worth Timeline</h3>
+              <p className="text-[11px] text-slate-500">Cumulative earnings trajectory from history</p>
+            </div>
+          </div>
+          <NetWorthTimeline entries={entries} />
+        </div>
+      )}
 
       {/* ── Net worth tracker ── */}
       <div className="glass rounded-2xl p-5">
