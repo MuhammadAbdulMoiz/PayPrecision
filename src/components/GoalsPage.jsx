@@ -111,7 +111,7 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
         finalSalary={finalSalary}
         dailyWage={dailyWage}
         goals={goals}
-        totalAvailable={finalSalary + loans.filter(l => l.status !== 'paid' && (l.currency === 'PKR' || !l.currency)).reduce((s, l) => s + (l.remaining || 0), 0)}
+        totalAvailable={finalSalary + loans.filter(l => l.status !== 'paid' && !l.goalId && (l.currency === 'PKR' || !l.currency)).reduce((s, l) => s + (l.remaining || 0), 0)}
       />
 
       {/* Expense Tracker */}

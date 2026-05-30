@@ -223,9 +223,9 @@ export default function ExpenseTracker({ finalSalary = 0, loans = [] }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [populating, setPopulating] = useState(false)
 
-  // Active loans that are in PKR and not yet fully paid — represent cash you received but haven't returned
+  // Active loans in PKR with no linked goal — money borrowed freely, not already spent on a goal purchase
   const activeLoanCash = loans
-    .filter(l => l.status !== 'paid' && (l.currency === 'PKR' || !l.currency))
+    .filter(l => l.status !== 'paid' && !l.goalId && (l.currency === 'PKR' || !l.currency))
     .reduce((s, l) => s + (l.remaining || 0), 0)
 
   // Total available = salary + cash from active loans still in your possession
