@@ -212,7 +212,9 @@ function SpendingDonut({ data, total }) {
 const EMPTY_FORM = { name: '', category: 'Food', amount: '', note: '', recurring: false }
 
 export default function ExpenseTracker({ finalSalary = 0 }) {
-  const { expenses, addExpense, deleteExpense, populateRecurring } = useExpenses()
+  const { expenses, addExpense, updateExpense, deleteExpense, populateRecurring } = useExpenses()
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState({})
   const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7))
   const { getBudget, setBudget } = useBudgets(filterMonth)
   const [view, setView] = useState('log')   // 'log' | 'budget' | 'chart'
@@ -389,34 +391,84 @@ export default function ExpenseTracker({ finalSalary = 0 }) {
                       <th className="pb-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">Category</th>
                       <th className="pb-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500">Amount</th>
                       <th className="pb-2 pl-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">Note</th>
-                      <th className="pb-2 w-8" />
+                      <th className="pb-2 w-16" />
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((e) => (
-                      <tr key={e.id} className="group border-b border-white/5 last:border-0">
-                        <td className="py-2.5 font-medium text-slate-200">
-                          {e.name}
-                          {e.recurring && <span className="ml-1.5 rounded px-1 py-0.5 text-[9px] font-bold bg-amber-500/20 text-amber-300">↻</span>}
-                        </td>
-                        <td className="py-2.5">
-                          <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                            style={{ backgroundColor: m(e.category).light, color: m(e.category).bar }}>
-                            {m(e.category).icon} {e.category}
-                          </span>
-                        </td>
-                        <td className="py-2.5 text-right font-semibold tabular-nums text-slate-200">PKR {fmtPKR(e.amount)}</td>
-                        <td className="py-2.5 pl-3 text-xs text-slate-500">{e.note}</td>
-                        <td className="py-2.5">
-                          <button onClick={() => deleteExpense(e.id)} aria-label="Delete"
-                            className="flex h-6 w-6 items-center justify-center rounded text-slate-600 opacity-0 transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100">
-                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                              <path d="M18 6L6 18M6 6l12 12"/>
-                            </svg>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {filtered.map((e) => {
+                      const isEditing = editingId === e.id
+                      return isEditing ? (
+                        <tr key={e.id} className="border-b border-white/5 last:border-0 bg-white/[0.03]">
+                          <td className="py-1.5 pr-2">
+                            <input autoFocus value={editForm.name}
+                              onChange={ev => setEditForm(f => ({ ...f, name: ev.target.value }))}
+                              className="w-full rounded border border-blue-400/40 bg-white/5 px-2 py-1 text-sm text-white outline-none" />
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <select value={editForm.category}
+                              onChange={ev => setEditForm(f => ({ ...f, category: ev.target.value }))}
+                              className="w-full rounded border border-white/10 bg-slate-800 px-1.5 py-1 text-xs text-white outline-none">
+                              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <input type="number" min="0" value={editForm.amount}
+                              onChange={ev => setEditForm(f => ({ ...f, amount: ev.target.value }))}
+                              className="w-full rounded border border-blue-400/40 bg-white/5 px-2 py-1 text-sm text-right text-white outline-none" />
+                          </td>
+                          <td className="py-1.5 pl-3 pr-2">
+                            <input value={editForm.note}
+                              onChange={ev => setEditForm(f => ({ ...f, note: ev.target.value }))}
+                              placeholder="Note"
+                              className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300 outline-none" />
+                          </td>
+                          <td className="py-1.5">
+                            <div className="flex gap-1">
+                              <button onClick={async () => {
+                                await updateExpense(e.id, { name: editForm.name, category: editForm.category, amount: Number(editForm.amount), note: editForm.note })
+                                setEditingId(null)
+                              }} className="rounded bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-blue-500">
+                                Save
+                              </button>
+                              <button onClick={() => setEditingId(null)}
+                                className="rounded px-2 py-1 text-[10px] text-slate-500 hover:text-white">✕</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={e.id} className="group border-b border-white/5 last:border-0">
+                          <td className="py-2.5 font-medium text-slate-200">
+                            {e.name}
+                            {e.recurring && <span className="ml-1.5 rounded px-1 py-0.5 text-[9px] font-bold bg-amber-500/20 text-amber-300">↻</span>}
+                          </td>
+                          <td className="py-2.5">
+                            <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                              style={{ backgroundColor: m(e.category).light, color: m(e.category).bar }}>
+                              {m(e.category).icon} {e.category}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-right font-semibold tabular-nums text-slate-200">PKR {fmtPKR(e.amount)}</td>
+                          <td className="py-2.5 pl-3 text-xs text-slate-500">{e.note}</td>
+                          <td className="py-2.5">
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => { setEditingId(e.id); setEditForm({ name: e.name, category: e.category, amount: e.amount, note: e.note || '' }) }}
+                                aria-label="Edit"
+                                className="flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-blue-500/20 hover:text-blue-400">
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                  <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                              </button>
+                              <button onClick={() => deleteExpense(e.id)} aria-label="Delete"
+                                className="flex h-6 w-6 items-center justify-center rounded text-slate-600 hover:bg-red-500/20 hover:text-red-400">
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                  <path d="M18 6L6 18M6 6l12 12"/>
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
                 <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">

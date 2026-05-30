@@ -435,7 +435,7 @@ function DebtRow({ debt, onPay, onEdit, onRemove }) {
   )
 }
 
-function NetWorthTracker({ goals, finalSalary, loans = [], onPayLoan, assets = [] }) {
+function NetWorthTracker({ goals, finalSalary, loans = [], onPayLoan, onAddLoan, assets = [] }) {
   const [debts, setDebts] = useLocalStorage(DEBT_KEY, [])
   const [dName, setDName] = useState('')
   const [dAmount, setDAmount] = useState('')
@@ -451,11 +451,18 @@ function NetWorthTracker({ goals, finalSalary, loans = [], onPayLoan, assets = [
   const netWorth    = totalAssets - totalDebts
   const positive    = netWorth >= 0
 
-  const addDebt = (e) => {
+  const addDebt = async (e) => {
     e.preventDefault()
     if (!dName.trim() || !dAmount) return
-    const amt = Number(dAmount)
-    setDebts((prev) => [...prev, { id: Date.now().toString(36), name: dName, amount: amt, remaining: amt }])
+    await onAddLoan({
+      lenderName: dName.trim(),
+      amount: Number(dAmount),
+      currency: 'PKR',
+      loanDate: new Date().toISOString().slice(0, 10),
+      purpose: 'Manual liability',
+      monthlyInstallment: 0,
+      notes: '',
+    })
     setDName(''); setDAmount('')
   }
 
@@ -562,11 +569,14 @@ function NetWorthTracker({ goals, finalSalary, loans = [], onPayLoan, assets = [
         )}
 
         {loans.length === 0 && activeDebts.length === 0 && paidDebts.length === 0 && (
-          <p className="text-[12px] text-slate-600 mb-2">No debts added yet. Add a loan in the Goals tab or add a manual liability below.</p>
+          <p className="text-[12px] text-slate-600 mb-2">No debts yet. Add via Loan Tracker or use the form below — it creates a real loan entry.</p>
         )}
 
-        <form onSubmit={addDebt} className="mt-3 flex gap-2">
-          <input type="text" placeholder="Liability name" value={dName}
+        <div className="mt-3 mb-1">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Add to Loan Tracker</p>
+        </div>
+        <form onSubmit={addDebt} className="flex gap-2">
+          <input type="text" placeholder="Lender / name" value={dName}
             onChange={(e) => setDName(e.target.value)}
             className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-red-500/40" />
           <input type="number" min="1" placeholder="Amount (PKR)" value={dAmount}
@@ -590,7 +600,7 @@ const CAT_COLORS   = ['#3b82f6','#10b981','#f59e0b','#7c3aed','#0ea5e9','#ec4899
 export default function InsightsPage({ entries, finalSalary }) {
   const { expenses } = useExpenses()
   const { goals }    = useGoals()
-  const { loans, payLoan } = useLoans()
+  const { loans, payLoan, addLoan } = useLoans()
   const { assets }   = useAssets()
   const [months6]       = useState(() => lastNMonths(6))
   const [activeCatsArr, setActiveCatsArr] = useLocalStorage('pp-active-cats', EXPENSE_CATS.slice(0, 5))
@@ -748,7 +758,7 @@ export default function InsightsPage({ entries, finalSalary }) {
             <p className="text-[11px] text-slate-500">Goal savings minus your debts/liabilities</p>
           </div>
         </div>
-        <NetWorthTracker goals={goals} finalSalary={finalSalary} loans={loans} onPayLoan={payLoan} assets={assets} />
+        <NetWorthTracker goals={goals} finalSalary={finalSalary} loans={loans} onPayLoan={payLoan} onAddLoan={addLoan} assets={assets} />
       </div>
     </div>
   )

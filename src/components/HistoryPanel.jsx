@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 
 function formatDate(iso) {
   const d = new Date(iso)
@@ -152,6 +152,7 @@ export default function HistoryPanel({ entries, onClear, onDelete, onUpdateDate,
   const [monthFilter, setMonthFilter] = useState('all')
   const [editingId, setEditingId] = useState(null)
   const [editMonth, setEditMonth] = useState('')
+  const [expandedOT, setExpandedOT] = useState(null)
 
   const years = useMemo(() => {
     const set = new Set(entries.map((e) => new Date(e.date).getFullYear()))
@@ -254,7 +255,7 @@ export default function HistoryPanel({ entries, onClear, onDelete, onUpdateDate,
 
           {/* Table header */}
           <div className="glass rounded-2xl overflow-hidden">
-            <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr] gap-4 border-b border-white/10 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 light:border-slate-200">
+            <div className="grid grid-cols-[2fr_1.5fr_1fr_1.5fr] gap-4 border-b border-white/10 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 light:border-slate-200">
               <span>Billing Period</span>
               <span>Amount</span>
               <span>Status</span>
@@ -267,9 +268,9 @@ export default function HistoryPanel({ entries, onClear, onDelete, onUpdateDate,
               </div>
             ) : (
               filtered.map((entry, idx) => (
+                <Fragment key={entry.id}>
                 <div
-                  key={entry.id}
-                  className="grid grid-cols-[2fr_1.5fr_1fr_1fr] items-center gap-4 border-b border-white/5 px-5 py-4 transition-colors hover:bg-white/[0.02] last:border-b-0 light:border-slate-100 light:hover:bg-slate-50"
+                  className="grid grid-cols-[2fr_1.5fr_1fr_1.5fr] items-center gap-4 border-b border-white/5 px-5 py-4 transition-colors hover:bg-white/[0.02] light:border-slate-100 light:hover:bg-slate-50"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
@@ -337,6 +338,17 @@ export default function HistoryPanel({ entries, onClear, onDelete, onUpdateDate,
 
                   <div className="flex items-center justify-end gap-2">
                     <button
+                      onClick={() => setExpandedOT(expandedOT === entry.id ? null : entry.id)}
+                      title="OT Projector"
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        expandedOT === entry.id
+                          ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                          : 'border-white/10 text-slate-400 hover:border-amber-500/30 hover:text-amber-400'
+                      }`}
+                    >
+                      OT
+                    </button>
+                    <button
                       onClick={() => onDelete(entry.id)}
                       className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-red-500/30 hover:text-red-400 light:border-slate-200"
                     >
@@ -344,6 +356,35 @@ export default function HistoryPanel({ entries, onClear, onDelete, onUpdateDate,
                     </button>
                   </div>
                 </div>
+
+                {/* OT Projector panel */}
+                {expandedOT === entry.id && (() => {
+                  const otRate = entry.results?.overtimeRate
+                    || ((parseFloat(entry.params?.income || 0) * parseFloat(entry.params?.dollarRate || 1)) / parseFloat(entry.params?.workingDays || 22)) * 1.5
+                  const base = entry.results?.finalSalary || 0
+                  const scenarios = [2, 5, 8, 10, 15]
+                  return (
+                    <div className="border-t border-white/5 px-5 py-3 bg-amber-500/5">
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-amber-400/70">
+                        OT Projection — based on this month&apos;s rate · PKR {formatPKR(otRate)}/day OT
+                      </p>
+                      <div className="grid grid-cols-4 gap-2">
+                        {scenarios.map(days => {
+                          const otPay = days * otRate
+                          const total = base + otPay
+                          return (
+                            <div key={days} className="rounded-lg bg-white/5 px-3 py-2 text-center">
+                              <p className="text-[10px] text-slate-500">+{days} days</p>
+                              <p className="text-xs font-semibold text-amber-400">+{formatPKR(otPay)}</p>
+                              <p className="text-[10px] text-slate-300 mt-0.5">{formatPKR(total)}</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
+                </Fragment>
               ))
             )}
           </div>

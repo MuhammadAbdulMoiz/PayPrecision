@@ -32,6 +32,15 @@ export function useExpenses() {
     setExpenses((prev) => [entry, ...prev])
   }, [])
 
+  const updateExpense = useCallback(async (id, data) => {
+    await fetch(`/api/expenses/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).catch(() => {})
+    setExpenses((prev) => prev.map((e) => e.id === id ? { ...e, ...data } : e))
+  }, [])
+
   const deleteExpense = useCallback(async (id) => {
     await fetch(`/api/expenses/${id}`, { method: 'DELETE' }).catch(() => {})
     setExpenses((prev) => prev.filter((e) => e.id !== id))
@@ -62,5 +71,5 @@ export function useExpenses() {
     return toAdd.length
   }, [expenses])
 
-  return { expenses, addExpense, deleteExpense, populateRecurring }
+  return { expenses, addExpense, updateExpense, deleteExpense, populateRecurring }
 }
