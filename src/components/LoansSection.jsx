@@ -110,8 +110,71 @@ function AddLoanModal({ goals, onClose, onSubmit }) {
   )
 }
 
+function PeopleLedger({ loans = [] }) {
+  // Group loans by lender name
+  const byPerson = {}
+  loans.forEach(l => {
+    const key = (l.lenderName || 'Unknown').trim()
+    if (!byPerson[key]) byPerson[key] = { name: key, borrowed: 0, repaid: 0, outstanding: 0, count: 0, active: 0 }
+    byPerson[key].borrowed    += l.amount
+    byPerson[key].repaid      += (l.totalPaid || 0)
+    byPerson[key].outstanding += (l.status !== 'paid' ? (l.remaining || 0) : 0)
+    byPerson[key].count       += 1
+    if (l.status !== 'paid') byPerson[key].active += 1
+  })
+
+  const people = Object.values(byPerson).sort((a, b) => b.outstanding - a.outstanding)
+
+  if (people.length === 0) {
+    return <p className="py-6 text-center text-sm text-slate-500">No people to show.</p>
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {people.map(p => {
+        const pct = p.borrowed > 0 ? Math.round((p.repaid / p.borrowed) * 100) : 0
+        const settled = p.outstanding <= 0
+        return (
+          <div key={p.name} className="glass rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-700 text-sm font-bold text-white">
+                  {p.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">{p.name}</p>
+                  <p className="text-[10px] text-slate-500">
+                    {p.count} loan{p.count !== 1 ? 's' : ''}{p.active > 0 ? ` · ${p.active} active` : ''}
+                  </p>
+                </div>
+              </div>
+              {settled ? (
+                <span className="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-bold text-emerald-400">Settled ✓</span>
+              ) : (
+                <div className="text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">You owe</p>
+                  <p className="text-sm font-bold text-red-400 tabular-nums">PKR {fmtPKR(p.outstanding)}</p>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+              <span>Borrowed PKR {fmtPKR(p.borrowed)}</span>
+              <span className="text-emerald-400">Repaid PKR {fmtPKR(p.repaid)} ({pct}%)</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-blue-500 transition-all duration-700"
+                style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function LoansSection({ goals = [], loans = [], onAdd, onUpdate, onDelete, onUploadImage }) {
   const [showForm, setShowForm] = useState(false)
+  const [view, setView] = useState('cards') // 'cards' | 'ledger'
 
   const handleAdd = async (data) => {
     await onAdd(data)
@@ -165,13 +228,25 @@ export default function LoansSection({ goals = [], loans = [], onAdd, onUpdate, 
             <p className="text-xs text-red-400">PKR {fmtPKR(totalOwed)} outstanding across {activeLoans.length} loan{activeLoans.length !== 1 ? 's' : ''}</p>
           )}
         </div>
-        <button onClick={() => setShowForm(true)}
-          className="flex items-center gap-1.5 rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600">
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path d="M12 5v14m-7-7h14" />
-          </svg>
-          Add Loan
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg bg-white/5 p-0.5">
+            <button onClick={() => setView('cards')}
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${view === 'cards' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+              Cards
+            </button>
+            <button onClick={() => setView('ledger')}
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${view === 'ledger' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+              People
+            </button>
+          </div>
+          <button onClick={() => setShowForm(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              <path d="M12 5v14m-7-7h14" />
+            </svg>
+            Add Loan
+          </button>
+        </div>
       </div>
 
       {/* Overview card */}
@@ -232,18 +307,22 @@ export default function LoansSection({ goals = [], loans = [], onAdd, onUpdate, 
         )
       })()}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-start">
-        {loans.map(loan => (
-          <LoanCard
-            key={loan.id}
-            loan={loan}
-            goals={goals}
-            onDelete={onDelete}
-            onUpdate={onUpdate}
-            onUploadImage={onUploadImage}
-          />
-        ))}
-      </div>
+      {view === 'cards' ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-start">
+          {loans.map(loan => (
+            <LoanCard
+              key={loan.id}
+              loan={loan}
+              goals={goals}
+              onDelete={onDelete}
+              onUpdate={onUpdate}
+              onUploadImage={onUploadImage}
+            />
+          ))}
+        </div>
+      ) : (
+        <PeopleLedger loans={loans} />
+      )}
 
       {showForm && <AddLoanModal goals={goals} onClose={() => setShowForm(false)} onSubmit={handleAdd} />}
     </div>

@@ -682,6 +682,8 @@ export default function InsightsPage({ entries, finalSalary }) {
   const { loans, payLoan, addLoan } = useLoans()
   const { assets }   = useAssets()
   const [months6]       = useState(() => lastNMonths(6))
+  const currentMonth    = new Date().toISOString().slice(0, 7)
+  const prevMonth       = lastNMonths(2)[0]
   const [activeCatsArr, setActiveCatsArr] = useLocalStorage('pp-active-cats', EXPENSE_CATS.slice(0, 5))
   const activeCats = useMemo(() => new Set(activeCatsArr), [activeCatsArr])
 
@@ -857,6 +859,290 @@ export default function InsightsPage({ entries, finalSalary }) {
         </div>
         <NetWorthTracker goals={goals} finalSalary={finalSalary} loans={loans} onPayLoan={payLoan} onAddLoan={addLoan} assets={assets} />
       </div>
+
+      {/* ── Burn Rate Calculator ── */}
+      {(() => {
+        const last3 = months6.slice(-3)
+        const avgBurn = last3.length
+          ? last3.reduce((s, m) => s + expenses.filter(e => e.month === m).reduce((a, e) => a + e.amount, 0), 0) / last3.length
+          : 0
+        const totalAssetVal = goals.reduce((s, g) => s + (g.savedAmount || 0), 0) + assets.reduce((s, a) => s + (a.currentValue || 0), 0)
+        const months = avgBurn > 0 ? totalAssetVal / avgBurn : null
+        const color  = !months ? '#64748b' : months < 3 ? '#ef4444' : months < 6 ? '#f59e0b' : '#10b981'
+        const label  = !months ? '—' : months < 3 ? 'Critical' : months < 6 ? 'Low' : months < 12 ? 'Moderate' : 'Healthy'
+        return (
+          <div className="glass rounded-2xl p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-500/20">
+                <svg className="h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/>
+                  <path d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"/>
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-200">Burn Rate</h3>
+                <p className="text-[11px] text-slate-500">How long your savings last at current spending</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl bg-white/5 p-3 text-center">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Survival</p>
+                <p className="mt-1 text-2xl font-extrabold" style={{ color }}>{months ? Math.floor(months) : '—'}</p>
+                <p className="text-[10px] text-slate-500">months</p>
+              </div>
+              <div className="rounded-xl bg-white/5 p-3 text-center">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Avg Burn</p>
+                <p className="mt-1 text-sm font-bold text-slate-200">PKR {fmtPKR(avgBurn)}</p>
+                <p className="text-[10px] text-slate-500">/month</p>
+              </div>
+              <div className="rounded-xl bg-white/5 p-3 text-center">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Status</p>
+                <p className="mt-1 text-sm font-bold" style={{ color }}>{label}</p>
+                <p className="text-[10px] text-slate-500">runway</p>
+              </div>
+            </div>
+            {months && months < 6 && (
+              <p className="mt-3 text-[11px] text-amber-400/80">
+                ⚠ Less than 6 months runway. Consider reducing spending or increasing savings.
+              </p>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ── Expense Leak Detector ── */}
+      {(() => {
+        const curr = expenses.filter(e => e.month === currentMonth)
+        const prev = expenses.filter(e => e.month === prevMonth)
+        const currTotal = cat => curr.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0)
+        const prevTotal = cat => prev.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0)
+
+        const spikes = EXPENSE_CATS
+          .map(cat => ({ cat, curr: currTotal(cat), prev: prevTotal(cat) }))
+          .filter(c => c.prev > 0 && c.curr > c.prev * 1.5)
+          .sort((a, b) => (b.curr - b.prev) - (a.curr - a.prev))
+
+        const recurring = curr.filter(e => e.recurring)
+        const recurringTotal = recurring.reduce((s, e) => s + e.amount, 0)
+
+        // Small repeated expenses: non-recurring, amount < 5000, appearing 3+ times
+        const nameCounts = curr.filter(e => !e.recurring).reduce((acc, e) => {
+          const key = e.name.toLowerCase().trim()
+          acc[key] = (acc[key] || 0) + 1
+          return acc
+        }, {})
+        const coffeeLeaks = Object.entries(nameCounts)
+          .filter(([, count]) => count >= 2)
+          .map(([name, count]) => ({
+            name,
+            count,
+            total: curr.filter(e => e.name.toLowerCase().trim() === name).reduce((s, e) => s + e.amount, 0),
+          }))
+
+        const hasLeaks = spikes.length > 0 || coffeeLeaks.length > 0
+
+        return (
+          <div className="glass rounded-2xl p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/20">
+                  <svg className="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-200">Expense Leak Detector</h3>
+                  <p className="text-[11px] text-slate-500">Unusual spikes and repeated spending</p>
+                </div>
+              </div>
+              {!hasLeaks && <span className="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-bold text-emerald-400">No leaks ✓</span>}
+            </div>
+
+            {spikes.length > 0 && (
+              <div className="mb-3">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-orange-400">Category Spikes vs Last Month</p>
+                <div className="space-y-2">
+                  {spikes.slice(0, 4).map(s => {
+                    const pct = Math.round(((s.curr - s.prev) / s.prev) * 100)
+                    return (
+                      <div key={s.cat} className="flex items-center justify-between rounded-lg bg-orange-500/10 border border-orange-500/20 px-3 py-2">
+                        <span className="text-sm font-medium text-slate-200">{s.cat}</span>
+                        <div className="text-right">
+                          <span className="text-sm font-bold text-orange-400">+{pct}%</span>
+                          <p className="text-[10px] text-slate-500">PKR {fmtPKR(s.prev)} → {fmtPKR(s.curr)}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {coffeeLeaks.length > 0 && (
+              <div className="mb-3">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-amber-400">Repeated Expenses</p>
+                <div className="space-y-1.5">
+                  {coffeeLeaks.slice(0, 4).map(l => (
+                    <div key={l.name} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+                      <span className="text-sm capitalize text-slate-300">{l.name}</span>
+                      <span className="text-[11px] text-amber-400">{l.count}× · PKR {fmtPKR(l.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {recurringTotal > 0 && (
+              <div className="rounded-lg bg-white/5 px-3 py-2 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">Total recurring subscriptions/bills</span>
+                <span className="text-sm font-bold text-slate-200">PKR {fmtPKR(recurringTotal)}/mo</span>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ── Subscription Timeline ── */}
+      {(() => {
+        const recurring = expenses.filter(e => e.recurring)
+        if (recurring.length === 0) return null
+        const byCategory = EXPENSE_CATS.map(cat => ({
+          cat,
+          items: recurring.filter(e => e.category === cat),
+          total: recurring.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0),
+        })).filter(c => c.items.length > 0)
+        const grandTotal = recurring.reduce((s, e) => s + e.amount, 0)
+        return (
+          <div className="glass rounded-2xl p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/20">
+                  <svg className="h-4 w-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-200">Subscription Timeline</h3>
+                  <p className="text-[11px] text-slate-500">Recurring monthly commitments</p>
+                </div>
+              </div>
+              <span className="text-sm font-bold text-purple-400">PKR {fmtPKR(grandTotal)}<span className="text-[11px] font-normal text-slate-500">/mo</span></span>
+            </div>
+            <div className="space-y-3">
+              {byCategory.map(({ cat, items, total }) => {
+                const i = EXPENSE_CATS.indexOf(cat)
+                const color = CAT_COLORS[i] || '#64748b'
+                return (
+                  <div key={cat}>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color }}>{cat}</span>
+                      <span className="text-[11px] text-slate-400">PKR {fmtPKR(total)}/mo</span>
+                    </div>
+                    <div className="space-y-1">
+                      {items.map(e => (
+                        <div key={e.id} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5">
+                          <span className="text-xs text-slate-300">{e.name}</span>
+                          <span className="text-xs font-semibold text-slate-200">PKR {fmtPKR(e.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Financial Calendar ── */}
+      {(() => {
+        const today = new Date()
+        const year  = today.getFullYear()
+        const month = today.getMonth()
+        const daysInMonth = new Date(year, month + 1, 0).getDate()
+        const todayDay = today.getDate()
+
+        // Build events list
+        const events = []
+
+        // Salary on day 1
+        events.push({ day: 1, label: 'Salary credited', type: 'salary' })
+
+        // Recurring expenses
+        const recurringThisMonth = expenses.filter(e => e.recurring)
+        recurringThisMonth.forEach(e => {
+          events.push({ day: 5, label: e.name, amount: e.amount, type: e.category === 'Subscriptions' ? 'sub' : 'bill' })
+        })
+
+        // Loan installments
+        loans.filter(l => l.status !== 'paid' && l.monthlyInstallment > 0).forEach(l => {
+          const loanDay = new Date(l.loanDate + 'T00:00:00').getDate()
+          events.push({ day: loanDay, label: `${l.lenderName} installment`, amount: l.monthlyInstallment, type: 'loan' })
+        })
+
+        events.sort((a, b) => a.day - b.day)
+        const upcoming = events.filter(e => e.day >= todayDay)
+        const past     = events.filter(e => e.day < todayDay)
+
+        const typeColor = { salary: '#10b981', bill: '#f59e0b', loan: '#ef4444', sub: '#8b5cf6' }
+        const typeLabel = { salary: '💰', bill: '📋', loan: '💳', sub: '🔄' }
+
+        return (
+          <div className="glass rounded-2xl p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/20">
+                <svg className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-200">Financial Calendar</h3>
+                <p className="text-[11px] text-slate-500">
+                  {today.toLocaleString('en-US', { month: 'long', year: 'numeric' })} · Day {todayDay} of {daysInMonth}
+                </p>
+              </div>
+            </div>
+
+            {upcoming.length > 0 && (
+              <div className="mb-3">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Upcoming</p>
+                <div className="space-y-1.5">
+                  {upcoming.map((e, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
+                        style={{ backgroundColor: typeColor[e.type] + '20', color: typeColor[e.type] }}>
+                        {e.day}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-slate-200 truncate">{typeLabel[e.type]} {e.label}</p>
+                      </div>
+                      {e.amount && <span className="text-xs font-semibold shrink-0" style={{ color: typeColor[e.type] }}>
+                        {e.type === 'salary' ? '+' : '-'}PKR {fmtPKR(e.amount)}
+                      </span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {past.length > 0 && (
+              <div>
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-600">Earlier this month</p>
+                <div className="space-y-1 opacity-50">
+                  {past.map((e, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-1.5">
+                      <span className="text-[11px] text-slate-600 w-6 text-center">{e.day}</span>
+                      <span className="text-xs text-slate-600 truncate">{typeLabel[e.type]} {e.label}</span>
+                      {e.amount && <span className="text-[11px] text-slate-600 ml-auto shrink-0">PKR {fmtPKR(e.amount)}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }

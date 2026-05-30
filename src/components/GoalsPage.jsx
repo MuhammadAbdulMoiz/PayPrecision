@@ -9,6 +9,7 @@ import ExpenseTracker from './ExpenseTracker'
 import LoansSection from './LoansSection'
 import AssetsSection from './AssetsSection'
 import AffordabilityTool from './AffordabilityTool'
+import SavingsAccelerator from './SavingsAccelerator'
 
 export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
   const { goals, addGoal, updateGoal, deleteGoal } = useGoals()
@@ -113,6 +114,9 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
         goals={goals}
         totalAvailable={finalSalary + loans.filter(l => l.status !== 'paid' && !l.goalId && (l.currency === 'PKR' || !l.currency)).reduce((s, l) => s + (l.remaining || 0), 0)}
       />
+
+      {/* Savings Accelerator */}
+      <SavingsAccelerator goals={goals} finalSalary={finalSalary} />
 
       {/* Expense Tracker */}
       <div>
