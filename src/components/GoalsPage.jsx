@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useGoals } from '../hooks/useGoals'
 import { useLoans } from '../hooks/useLoans'
 import { useAssets } from '../hooks/useAssets'
+import { useExpenses } from '../hooks/useExpenses'
 import GoalsDashboard from './GoalsDashboard'
 import GoalCard from './GoalCard'
 import GoalForm from './GoalForm'
@@ -15,8 +16,14 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
   const { goals, addGoal, updateGoal, deleteGoal } = useGoals()
   const { loans, addLoan, updateLoan, deleteLoan, uploadLoanImage } = useLoans()
   const { assets, addAsset, updateAsset, deleteAsset, uploadAssetImage } = useAssets()
+  const { expenses } = useExpenses()
   const [showForm, setShowForm] = useState(false)
   const [showAllGoals, setShowAllGoals] = useState(false)
+
+  const currentMonth = new Date().toISOString().slice(0, 7)
+  const monthlyExpenses = expenses
+    .filter(e => e.month === currentMonth)
+    .reduce((s, e) => s + (e.amount || 0), 0)
 
   const handleAddGoal = (data) => {
     addGoal(data)
@@ -125,6 +132,7 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
         finalSalary={finalSalary}
         dailyWage={dailyWage}
         goals={goals}
+        monthlyExpenses={monthlyExpenses}
         totalAvailable={finalSalary + loans.filter(l => l.status !== 'paid' && !l.goalId && (l.currency === 'PKR' || !l.currency)).reduce((s, l) => s + (l.remaining || 0), 0)}
       />
 

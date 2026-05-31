@@ -862,12 +862,17 @@ export default function InsightsPage({ entries, finalSalary }) {
 
       {/* ── Burn Rate Calculator ── */}
       {(() => {
-        const last3 = months6.slice(-3)
-        const avgBurn = last3.length
-          ? last3.reduce((s, m) => s + expenses.filter(e => e.month === m).reduce((a, e) => a + e.amount, 0), 0) / last3.length
+        // Average burn over months that actually have spending data (not blindly /3)
+        const monthTotals = months6
+          .map(m => expenses.filter(e => e.month === m).reduce((a, e) => a + e.amount, 0))
+          .filter(t => t > 0)
+        const avgBurn = monthTotals.length
+          ? monthTotals.reduce((s, t) => s + t, 0) / monthTotals.length
           : 0
-        const totalAssetVal = goals.reduce((s, g) => s + (g.savedAmount || 0), 0) + assets.reduce((s, a) => s + (a.currentValue || 0), 0)
-        const months = avgBurn > 0 ? totalAssetVal / avgBurn : null
+        // Survival uses LIQUID savings only — goal savings. Physical assets (bike,
+        // laptop, monitor) can't be spent to cover monthly bills, so they're excluded.
+        const liquidSavings = goals.reduce((s, g) => s + (g.savedAmount || 0), 0)
+        const months = avgBurn > 0 ? liquidSavings / avgBurn : null
         const color  = !months ? '#64748b' : months < 3 ? '#ef4444' : months < 6 ? '#f59e0b' : '#10b981'
         const label  = !months ? '—' : months < 3 ? 'Critical' : months < 6 ? 'Low' : months < 12 ? 'Moderate' : 'Healthy'
         return (
@@ -881,7 +886,7 @@ export default function InsightsPage({ entries, finalSalary }) {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-slate-200">Burn Rate</h3>
-                <p className="text-[11px] text-slate-500">How long your savings last at current spending</p>
+                <p className="text-[11px] text-slate-500">How long your liquid savings last at current spending</p>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -901,8 +906,12 @@ export default function InsightsPage({ entries, finalSalary }) {
                 <p className="text-[10px] text-slate-500">runway</p>
               </div>
             </div>
+            <p className="mt-3 text-[10px] text-slate-500">
+              Based on PKR {fmtPKR(liquidSavings)} liquid savings ÷ PKR {fmtPKR(avgBurn)}/mo avg spend.
+              Physical items aren&apos;t counted — they can&apos;t pay the bills.
+            </p>
             {months && months < 6 && (
-              <p className="mt-3 text-[11px] text-amber-400/80">
+              <p className="mt-1 text-[11px] text-amber-400/80">
                 ⚠ Less than 6 months runway. Consider reducing spending or increasing savings.
               </p>
             )}
