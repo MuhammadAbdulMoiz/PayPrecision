@@ -16,38 +16,22 @@ function payDateFor(year, monthIndex, payDay) {
   return d
 }
 
-function monthKeyOf(date) {
+export function monthKeyOf(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
 /**
- * Pay-cycle config shared across the app.
- *
- * - payDay: day of the month salary is normally credited (1–31, default 1).
- * - credits: { 'YYYY-MM': 'YYYY-MM-DD' } — actual credited date per month, for
- *   when pay is delayed and the user records when it really landed.
- *
- * Derived: the current cycle runs from the most recent pay day up to the next
- * one, and `daysUntilNextPay` is how long current cash has to last.
+ * Pay-cycle config: which day of the month salary normally lands, and the
+ * derived cycle window / countdown. Pure date math — no money is tracked here
+ * (see useCashLedger for the actual available-cash ledger).
  */
 export function usePayCycle() {
   const [payDay, setPayDayRaw] = useLocalStorage('pp-payday', 1)
-  const [credits, setCredits] = useLocalStorage('pp-salary-credits', {})
 
   const setPayDay = (d) => {
     const n = Math.min(Math.max(Math.round(Number(d) || 1), 1), 31)
     setPayDayRaw(n)
   }
-
-  const setCredit = (monthKey, dateStr) =>
-    setCredits((prev) => ({ ...(prev || {}), [monthKey]: dateStr }))
-
-  const clearCredit = (monthKey) =>
-    setCredits((prev) => {
-      const next = { ...(prev || {}) }
-      delete next[monthKey]
-      return next
-    })
 
   const computed = useMemo(() => {
     const today = new Date()
@@ -67,21 +51,17 @@ export function usePayCycle() {
     }
 
     const daysUntilNextPay = Math.max(Math.round((nextPayDate - today) / DAY_MS), 1)
-    const cycleLength = Math.max(Math.round((nextPayDate - currentCycleStart) / DAY_MS), 1)
-    const cycleElapsed = Math.min(Math.max(Math.round((today - currentCycleStart) / DAY_MS), 0), cycleLength)
 
     return {
       today,
       currentCycleStart,
       nextPayDate,
       daysUntilNextPay,
-      cycleLength,
-      cycleElapsed,
       thisMonthKey: monthKeyOf(today),
     }
   }, [payDay])
 
-  return { payDay, setPayDay, credits: credits || {}, setCredit, clearCredit, ...computed }
+  return { payDay, setPayDay, ...computed }
 }
 
 // Short label like "Jul 15" for a Date.

@@ -212,7 +212,7 @@ function SpendingDonut({ data, total }) {
 
 const EMPTY_FORM = { name: '', category: 'Food', amount: '', note: '', recurring: false }
 
-export default function ExpenseTracker({ finalSalary = 0, loans = [], daysUntilPay = 0, nextPayLabel = '' }) {
+export default function ExpenseTracker({ finalSalary = 0, loans = [], availableCash = null, daysUntilPay = 0, nextPayLabel = '' }) {
   const { expenses, addExpense, updateExpense, deleteExpense, populateRecurring } = useExpenses()
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
@@ -231,8 +231,10 @@ export default function ExpenseTracker({ finalSalary = 0, loans = [], daysUntilP
     .filter(l => l.status !== 'paid' && !l.goalId && (l.currency === 'PKR' || !l.currency))
     .reduce((s, l) => s + (l.remaining || 0), 0)
 
-  // Total available = salary + cash from active loans still in your possession
-  const totalAvailable = finalSalary + activeLoanCash
+  // Total available = real cash on hand (carryover + credited salary) + active loan cash.
+  // Falls back to salary+loans if the ledger isn't wired in.
+  const totalAvailable = availableCash != null ? availableCash : finalSalary + activeLoanCash
+  const cashOnHandPart = totalAvailable - activeLoanCash
 
   const filtered = expenses.filter((e) => e.month === filterMonth)
   const total    = filtered.reduce((s, e) => s + (e.amount || 0), 0)
@@ -380,7 +382,7 @@ export default function ExpenseTracker({ finalSalary = 0, loans = [], daysUntilP
             {activeLoanCash > 0 && (
               <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-500">
                 <span className="h-1.5 w-1.5 rounded-full bg-red-400 inline-block" />
-                Salary PKR {fmtPKR(finalSalary)}
+                Cash on hand PKR {fmtPKR(cashOnHandPart)}
                 <span className="text-red-400 ml-1">+ PKR {fmtPKR(activeLoanCash)} from active loans</span>
                 <span className="ml-1">= PKR {fmtPKR(totalAvailable)} available</span>
               </div>

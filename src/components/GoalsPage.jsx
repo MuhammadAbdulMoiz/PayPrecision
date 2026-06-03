@@ -3,7 +3,8 @@ import { useGoals } from '../hooks/useGoals'
 import { useLoans } from '../hooks/useLoans'
 import { useAssets } from '../hooks/useAssets'
 import { useExpenses } from '../hooks/useExpenses'
-import { usePayCycle, fmtShortDate } from '../hooks/usePayCycle'
+import { fmtShortDate } from '../hooks/usePayCycle'
+import { useCashLedger } from '../hooks/useCashLedger'
 import GoalsDashboard from './GoalsDashboard'
 import GoalCard from './GoalCard'
 import GoalForm from './GoalForm'
@@ -18,9 +19,14 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
   const { loans, addLoan, updateLoan, deleteLoan, uploadLoanImage } = useLoans()
   const { assets, addAsset, updateAsset, deleteAsset, uploadAssetImage } = useAssets()
   const { expenses } = useExpenses()
-  const { nextPayDate, daysUntilNextPay } = usePayCycle()
   const [showForm, setShowForm] = useState(false)
   const [showAllGoals, setShowAllGoals] = useState(false)
+
+  // Cash on hand from active PKR loans not tied to a goal purchase
+  const loanCash = loans
+    .filter(l => l.status !== 'paid' && !l.goalId && (l.currency === 'PKR' || !l.currency))
+    .reduce((s, l) => s + (l.remaining || 0), 0)
+  const { availableCash, nextPayDate, daysUntilNextPay } = useCashLedger(expenses, { loanCash })
 
   const currentMonth = new Date().toISOString().slice(0, 7)
   const monthlyExpenses = expenses
@@ -136,7 +142,7 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
         dailyWage={dailyWage}
         goals={goals}
         monthlyExpenses={monthlyExpenses}
-        totalAvailable={finalSalary + loans.filter(l => l.status !== 'paid' && !l.goalId && (l.currency === 'PKR' || !l.currency)).reduce((s, l) => s + (l.remaining || 0), 0)}
+        totalAvailable={availableCash}
         nextPayLabel={nextPayLabel}
         daysUntilNextPay={daysUntilNextPay}
       />
@@ -147,7 +153,7 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
       {/* Expense Tracker */}
       <div>
         <h3 className="mb-3 text-lg font-bold text-white light:text-slate-800">Expense Tracker</h3>
-        <ExpenseTracker finalSalary={finalSalary} loans={loans} daysUntilPay={daysUntilNextPay} nextPayLabel={nextPayLabel} />
+        <ExpenseTracker finalSalary={finalSalary} loans={loans} availableCash={availableCash} daysUntilPay={daysUntilNextPay} nextPayLabel={nextPayLabel} />
       </div>
 
       {showForm && (

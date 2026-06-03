@@ -4,7 +4,8 @@ import { useGoals } from '../hooks/useGoals'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useLoans, useLoanPayments } from '../hooks/useLoans'
 import { useAssets } from '../hooks/useAssets'
-import { usePayCycle, fmtShortDate } from '../hooks/usePayCycle'
+import { fmtShortDate } from '../hooks/usePayCycle'
+import { useCashLedger } from '../hooks/useCashLedger'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -675,15 +676,16 @@ function NetWorthTracker({ goals, finalSalary, loans = [], onPayLoan, onAddLoan,
 // ─── Burn Rate (with optional asset sale) ─────────────────────────────────────
 
 function survivalMeta(months) {
-  if (!months) return { color: '#64748b', label: '—' }
+  if (months == null)  return { color: '#64748b', label: '—' }
   if (months < 3)  return { color: '#ef4444', label: 'Critical' }
   if (months < 6)  return { color: '#f59e0b', label: 'Low' }
   if (months < 12) return { color: '#f59e0b', label: 'Moderate' }
   return { color: '#10b981', label: 'Healthy' }
 }
 
-function BurnRateCard({ expenses, goals, assets, months6 }) {
+function BurnRateCard({ expenses, assets, months6, cashOnHand = 0 }) {
   const [selectedIds, setSelectedIds] = useLocalStorage('pp-burn-sell-assets', [])
+  const [showAssets, setShowAssets] = useState(false)
 
   // Average burn over months that actually have spending data (not blindly /3)
   const avgBurn = useMemo(() => {
@@ -693,20 +695,23 @@ function BurnRateCard({ expenses, goals, assets, months6 }) {
     return totals.length ? totals.reduce((s, t) => s + t, 0) / totals.length : 0
   }, [expenses, months6])
 
-  // Liquid savings = goal savings only. Physical assets are illiquid until sold.
-  const liquidSavings = goals.reduce((s, g) => s + (g.savedAmount || 0), 0)
+  // Reserve = your real cash on hand (carryover + credited salary). Goal savings
+  // are NOT counted; physical assets only count when you choose to sell them.
+  const reserve = Math.max(cashOnHand, 0)
   const sellable = assets.filter((a) => (a.currentValue || 0) > 0)
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const selectedSellable = sellable.filter((a) => selectedSet.has(a.id))
   const selectedCount = selectedSellable.length
   const sellValue = selectedSellable.reduce((s, a) => s + (a.currentValue || 0), 0)
+  const sellableTotal = sellable.reduce((s, a) => s + (a.currentValue || 0), 0)
 
-  const baseMonths = avgBurn > 0 ? liquidSavings / avgBurn : null
-  const sellMonths = avgBurn > 0 ? (liquidSavings + sellValue) / avgBurn : null
+  const baseMonths = avgBurn > 0 ? reserve / avgBurn : null
+  const sellMonths = avgBurn > 0 ? (reserve + sellValue) / avgBurn : null
   const activeMonths = sellValue > 0 ? sellMonths : baseMonths
   const extraMonths = sellMonths != null && baseMonths != null ? sellMonths - baseMonths : 0
 
   const { color, label } = survivalMeta(activeMonths)
+  const survivalText = activeMonths == null ? '—' : Math.floor(activeMonths)
 
   const toggle = (id) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -724,14 +729,14 @@ function BurnRateCard({ expenses, goals, assets, months6 }) {
         </div>
         <div>
           <h3 className="text-sm font-semibold text-slate-200">Burn Rate</h3>
-          <p className="text-[11px] text-slate-500">How long your money lasts at current spending</p>
+          <p className="text-[11px] text-slate-500">How long your cash on hand lasts at current spending</p>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-xl bg-white/5 p-3 text-center">
           <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Survival</p>
-          <p className="mt-1 text-2xl font-extrabold" style={{ color }}>{activeMonths ? Math.floor(activeMonths) : '—'}</p>
+          <p className="mt-1 text-2xl font-extrabold" style={{ color }}>{survivalText}</p>
           <p className="text-[10px] text-slate-500">months</p>
         </div>
         <div className="rounded-xl bg-white/5 p-3 text-center">
@@ -751,68 +756,84 @@ function BurnRateCard({ expenses, goals, assets, months6 }) {
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-center">
             <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">If you don&apos;t sell</p>
-            <p className="mt-0.5 text-sm font-bold text-slate-300">{baseMonths ? Math.floor(baseMonths) : '—'} mo</p>
+            <p className="mt-0.5 text-sm font-bold text-slate-300">{baseMonths == null ? '—' : Math.floor(baseMonths)} mo</p>
           </div>
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2.5 text-center">
             <p className="text-[9px] font-semibold uppercase tracking-wider text-emerald-400">If you sell selected</p>
             <p className="mt-0.5 text-sm font-bold text-emerald-400">
-              {sellMonths ? Math.floor(sellMonths) : '—'} mo
+              {sellMonths == null ? '—' : Math.floor(sellMonths)} mo
               {extraMonths >= 1 && <span className="ml-1 text-[10px] font-semibold">(+{Math.floor(extraMonths)})</span>}
             </p>
           </div>
         </div>
       )}
 
-      {/* Asset sale selector */}
+      {/* Asset sale selector — collapsible */}
       {sellable.length > 0 && (
-        <div className="mt-4">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02]">
+          <button onClick={() => setShowAssets((v) => !v)}
+            className="flex w-full items-center justify-between px-3 py-2.5 text-left">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Sell assets to extend runway
-            </p>
-            <div className="flex items-center gap-2 text-[10px]">
-              <button onClick={selectAll} className="text-slate-400 hover:text-emerald-400">Select all</button>
-              <span className="text-slate-700">·</span>
-              <button onClick={clearAll} className="text-slate-400 hover:text-red-400">Clear</button>
+              {selectedCount > 0 && <span className="ml-1.5 text-emerald-400">· {selectedCount} selected</span>}
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-500">PKR {fmtPKR(sellableTotal)} available</span>
+              <svg className={`h-3.5 w-3.5 text-slate-400 transition-transform ${showAssets ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7"/></svg>
+            </span>
+          </button>
+
+          {showAssets && (
+            <div className="border-t border-white/10 px-3 pb-3 pt-2.5">
+              <div className="mb-2 flex items-center justify-end gap-2 text-[10px]">
+                <button onClick={selectAll} className="text-slate-400 hover:text-emerald-400">Select all</button>
+                <span className="text-slate-700">·</span>
+                <button onClick={clearAll} className="text-slate-400 hover:text-red-400">Clear</button>
+              </div>
+              <div className="space-y-1.5">
+                {sellable.map((a) => {
+                  const checked = selectedSet.has(a.id)
+                  return (
+                    <button key={a.id} onClick={() => toggle(a.id)}
+                      className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
+                        checked ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-white/10 bg-white/5 hover:border-white/20'
+                      }`}>
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                          checked ? 'border-emerald-400 bg-emerald-500/30 text-emerald-300' : 'border-white/20 text-transparent'
+                        }`}>
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <span className="truncate text-xs text-slate-300">{a.name}</span>
+                      </span>
+                      <span className={`shrink-0 text-xs font-semibold ${checked ? 'text-emerald-400' : 'text-slate-400'}`}>
+                        PKR {fmtPKR(a.currentValue || 0)}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              {sellValue > 0 && (
+                <p className="mt-2 text-[10px] text-emerald-400/80">
+                  Selling {selectedCount} item{selectedCount !== 1 ? 's' : ''} frees PKR {fmtPKR(sellValue)} of cash.
+                </p>
+              )}
             </div>
-          </div>
-          <div className="space-y-1.5">
-            {sellable.map((a) => {
-              const checked = selectedSet.has(a.id)
-              return (
-                <button key={a.id} onClick={() => toggle(a.id)}
-                  className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
-                    checked ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-white/10 bg-white/5 hover:border-white/20'
-                  }`}>
-                  <span className="flex items-center gap-2 min-w-0">
-                    <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                      checked ? 'border-emerald-400 bg-emerald-500/30 text-emerald-300' : 'border-white/20 text-transparent'
-                    }`}>
-                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M5 13l4 4L19 7"/></svg>
-                    </span>
-                    <span className="truncate text-xs text-slate-300">{a.name}</span>
-                  </span>
-                  <span className={`shrink-0 text-xs font-semibold ${checked ? 'text-emerald-400' : 'text-slate-400'}`}>
-                    PKR {fmtPKR(a.currentValue || 0)}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-          {sellValue > 0 && (
-            <p className="mt-2 text-[10px] text-emerald-400/80">
-              Selling {selectedCount} item{selectedCount !== 1 ? 's' : ''} frees PKR {fmtPKR(sellValue)} of cash.
-            </p>
           )}
         </div>
       )}
 
       <p className="mt-3 text-[10px] text-slate-500">
-        Based on PKR {fmtPKR(liquidSavings + sellValue)} available
-        {sellValue > 0 ? ' (savings + selected items)' : ' liquid savings'} ÷ PKR {fmtPKR(avgBurn)}/mo avg spend.
+        Based on PKR {fmtPKR(reserve + sellValue)} {sellValue > 0 ? '(cash on hand + selected items)' : 'cash on hand'} ÷ PKR {fmtPKR(avgBurn)}/mo avg spend.
         {sellable.length === 0 && ' Add owned items to model selling them here.'}
       </p>
-      {activeMonths && activeMonths < 6 && (
+      {reserve === 0 && sellValue === 0 && (
+        <p className="mt-1 text-[11px] text-amber-400/80">
+          No spare cash on hand. Set your balance &amp; mark salary credited in the calendar below, or tick assets to sell.
+        </p>
+      )}
+      {activeMonths != null && activeMonths < 6 && (reserve > 0 || sellValue > 0) && (
         <p className="mt-1 text-[11px] text-amber-400/80">
           ⚠ Less than 6 months runway. Consider reducing spending or increasing savings.
         </p>
@@ -823,12 +844,19 @@ function BurnRateCard({ expenses, goals, assets, months6 }) {
 
 // ─── Financial Calendar (user-defined pay cycle) ──────────────────────────────
 
-function FinancialCalendarCard({ expenses, loans, finalSalary = 0 }) {
-  const { payDay, setPayDay, credits, setCredit, clearCredit, nextPayDate, currentCycleStart, daysUntilNextPay } = usePayCycle()
+function FinancialCalendarCard({
+  expenses, loans, salarySuggestion = 0, hasSavedInvoice = false,
+  payDay, setPayDay, nextPayDate, currentCycleStart, daysUntilNextPay,
+  startingBalance = 0, setStartingBalance, credited, creditSalary, unCredit,
+  availableCash = 0, loanCash = 0,
+}) {
   const [editingDay, setEditingDay] = useState(false)
   const [dayInput, setDayInput] = useState(String(payDay))
+  const [editingBal, setEditingBal] = useState(false)
+  const [balInput, setBalInput] = useState('')
   const [creditOpen, setCreditOpen] = useState(false)
   const [creditDate, setCreditDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [creditAmt, setCreditAmt] = useState('')
 
   const today = new Date()
   const year = today.getFullYear()
@@ -836,12 +864,21 @@ function FinancialCalendarCard({ expenses, loans, finalSalary = 0 }) {
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const todayDay = today.getDate()
   const salaryDay = Math.min(payDay, daysInMonth)
-  const thisMonthKey = `${year}-${String(month + 1).padStart(2, '0')}`
-  const creditedISO = credits[thisMonthKey] || null
+  const creditedDate = credited?.date || null
+  const creditedAmount = credited?.amount ?? null
+  // Net base salary to show (saved invoice value, or the credited amount once marked)
+  const salaryShown = credited ? (creditedAmount ?? salarySuggestion) : salarySuggestion
 
-  const saveDay = () => {
-    setPayDay(dayInput)
-    setEditingDay(false)
+  const saveDay = () => { setPayDay(dayInput); setEditingDay(false) }
+  const saveBal = () => { setStartingBalance(Number(balInput) || 0); setEditingBal(false) }
+  const openCredit = () => {
+    setCreditAmt(salarySuggestion ? String(Math.round(salarySuggestion)) : '')
+    setCreditDate(new Date().toISOString().slice(0, 10))
+    setCreditOpen(true)
+  }
+  const saveCredit = () => {
+    creditSalary(Number(creditAmt) || salarySuggestion || 0, creditDate)
+    setCreditOpen(false)
   }
 
   // Loan installment events (real dates from loan records)
@@ -855,7 +892,7 @@ function FinancialCalendarCard({ expenses, loans, finalSalary = 0 }) {
     }))
 
   const events = [
-    { day: salaryDay, label: creditedISO ? 'Salary credited' : 'Salary due', type: 'salary', amount: finalSalary || null, credited: !!creditedISO },
+    { day: salaryDay, label: credited ? 'Salary credited' : 'Salary due', type: 'salary', amount: salaryShown || null, credited: !!credited },
     ...loanEvents,
   ].sort((a, b) => a.day - b.day)
 
@@ -894,11 +931,29 @@ function FinancialCalendarCard({ expenses, loans, finalSalary = 0 }) {
         </div>
       </div>
 
-      {/* Pay day config */}
+      {/* Available-now summary */}
+      <div className={`mb-4 rounded-xl border p-3 ${credited ? 'border-emerald-500/20 bg-emerald-500/10' : 'border-white/10 bg-white/5'}`}>
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Available now</p>
+          <p className="text-lg font-extrabold tabular-nums" style={{ color: availableCash >= 0 ? '#10b981' : '#ef4444' }}>
+            PKR {fmtPKR(availableCash)}
+          </p>
+        </div>
+        <p className="mt-0.5 text-[10px] text-slate-500">
+          Balance PKR {fmtPKR(startingBalance)}
+          {credited
+            ? <span className="text-emerald-400"> + Salary PKR {fmtPKR(creditedAmount ?? salaryShown)}</span>
+            : <span className="text-amber-400/80"> · salary not yet credited</span>}
+          {loanCash > 0 && <span className="text-red-400"> + Loans PKR {fmtPKR(loanCash)}</span>}
+        </p>
+      </div>
+
+      {/* Config: pay day + cash balance */}
       <div className="mb-4 rounded-xl border border-white/10 bg-white/5 p-3">
+        {/* Pay day */}
         {editingDay ? (
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-400">Salary credited on day</span>
+            <span className="text-[11px] text-slate-400">Salary lands on day</span>
             <input type="number" min="1" max="31" value={dayInput} autoFocus
               onChange={(e) => setDayInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') saveDay(); if (e.key === 'Escape') setEditingDay(false) }}
@@ -924,37 +979,83 @@ function FinancialCalendarCard({ expenses, loans, finalSalary = 0 }) {
           </div>
         )}
 
-        {/* Mark-credited override (for delayed pay) */}
+        {/* Cash balance (auto-carries to next month) */}
         <div className="mt-2.5 border-t border-white/10 pt-2.5">
-          {creditedISO ? (
+          {editingBal ? (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-400">Balance before salary</span>
+              <input type="number" value={balInput} autoFocus placeholder="0"
+                onChange={(e) => setBalInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveBal(); if (e.key === 'Escape') setEditingBal(false) }}
+                className="w-28 rounded-lg border border-blue-400/40 bg-white/5 px-2 py-1 text-sm text-white outline-none" />
+              <div className="ml-auto flex gap-1.5">
+                <button onClick={saveBal} className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500">Save</button>
+                <button onClick={() => setEditingBal(false)} className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:text-white">✕</button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-slate-300">
+                  Carryover balance: <span className="font-semibold text-slate-200">PKR {fmtPKR(startingBalance)}</span>
+                </p>
+                <p className="text-[10px] text-slate-500">Money before this month&apos;s salary · auto-carries each cycle</p>
+              </div>
+              <button onClick={() => { setBalInput(String(Math.round(startingBalance))); setEditingBal(true) }}
+                className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-400 hover:border-white/20 hover:text-white">
+                Edit
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Salary credited status */}
+        <div className="mt-2.5 border-t border-white/10 pt-2.5">
+          {credited ? (
             <div className="flex items-center justify-between">
               <p className="text-[11px] text-emerald-400">
-                ✓ Credited on {new Date(creditedISO + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                {(() => {
-                  const actual = new Date(creditedISO + 'T00:00:00').getDate()
+                ✓ Salary PKR {fmtPKR(creditedAmount ?? salaryShown)} credited
+                {creditedDate && <> on {new Date(creditedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>}
+                {creditedDate && (() => {
+                  const actual = new Date(creditedDate + 'T00:00:00').getDate()
                   const delay = actual - salaryDay
                   return delay > 0 ? <span className="ml-1 text-amber-400">({delay} day{delay !== 1 ? 's' : ''} late)</span> : null
                 })()}
               </p>
-              <button onClick={() => clearCredit(thisMonthKey)}
+              <button onClick={() => unCredit()}
                 className="text-[11px] text-slate-500 hover:text-red-400">Undo</button>
             </div>
           ) : creditOpen ? (
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-400">Credited on</span>
-              <input type="date" value={creditDate} onChange={(e) => setCreditDate(e.target.value)}
-                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200 outline-none focus:border-emerald-400/50" />
-              <div className="ml-auto flex gap-1.5">
-                <button onClick={() => { setCredit(thisMonthKey, creditDate); setCreditOpen(false) }}
-                  className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-500">Save</button>
-                <button onClick={() => setCreditOpen(false)} className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:text-white">✕</button>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-400 w-14">Amount</span>
+                <span className="text-[11px] text-slate-500">PKR</span>
+                <input type="number" value={creditAmt} autoFocus placeholder={salarySuggestion ? String(Math.round(salarySuggestion)) : 'Net salary'}
+                  onChange={(e) => setCreditAmt(e.target.value)}
+                  className="flex-1 rounded-lg border border-emerald-500/30 bg-emerald-900/20 px-2 py-1 text-sm text-white outline-none focus:border-emerald-400/60" />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-400 w-14">On</span>
+                <input type="date" value={creditDate} onChange={(e) => setCreditDate(e.target.value)}
+                  className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200 outline-none focus:border-emerald-400/50" />
+                <div className="ml-auto flex gap-1.5">
+                  <button onClick={saveCredit} className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-500">Credit it</button>
+                  <button onClick={() => setCreditOpen(false)} className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:text-white">✕</button>
+                </div>
               </div>
             </div>
           ) : (
-            <button onClick={() => setCreditOpen(true)}
-              className="text-[11px] font-semibold text-emerald-400/90 hover:text-emerald-300">
-              + Salary arrived? Mark it credited
-            </button>
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] text-slate-400">
+                {hasSavedInvoice
+                  ? <>Salary due: <span className="font-semibold text-slate-200">PKR {fmtPKR(salarySuggestion)}</span> <span className="text-slate-600">(net base)</span></>
+                  : <span className="text-slate-500">Save an invoice to set your salary</span>}
+              </p>
+              <button onClick={openCredit}
+                className="rounded-lg bg-emerald-600/90 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500">
+                Mark credited
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -1039,6 +1140,18 @@ export default function InsightsPage({ entries, finalSalary }) {
   const [months6]       = useState(() => lastNMonths(6))
   const currentMonth    = new Date().toISOString().slice(0, 7)
   const prevMonth       = lastNMonths(2)[0]
+
+  // Cash on hand from active PKR loans not tied to a goal purchase
+  const loanCash = loans
+    .filter((l) => l.status !== 'paid' && !l.goalId && (l.currency === 'PKR' || !l.currency))
+    .reduce((s, l) => s + (l.remaining || 0), 0)
+  const ledger = useCashLedger(expenses, { loanCash })
+
+  // Salary figure = net base after provident fund, from the latest SAVED invoice
+  // (not the live calculator). Falls back to the live final salary if nothing saved.
+  const salarySuggestion = entries.length
+    ? Math.max((entries[0].results?.monthlyPKR || 0) - (entries[0].results?.providentFund || 0), 0)
+    : finalSalary
   const [activeCatsArr, setActiveCatsArr] = useLocalStorage('pp-active-cats', EXPENSE_CATS.slice(0, 5))
   const activeCats = useMemo(() => new Set(activeCatsArr), [activeCatsArr])
 
@@ -1216,7 +1329,7 @@ export default function InsightsPage({ entries, finalSalary }) {
       </div>
 
       {/* ── Burn Rate Calculator ── */}
-      <BurnRateCard expenses={expenses} goals={goals} assets={assets} months6={months6} />
+      <BurnRateCard expenses={expenses} assets={assets} months6={months6} cashOnHand={ledger.cashOnHand} />
 
       {/* ── Expense Leak Detector ── */}
       {(() => {
@@ -1364,7 +1477,25 @@ export default function InsightsPage({ entries, finalSalary }) {
       })()}
 
       {/* ── Financial Calendar ── */}
-      <FinancialCalendarCard expenses={expenses} loans={loans} finalSalary={finalSalary} />
+      <FinancialCalendarCard
+        expenses={expenses}
+        loans={loans}
+        salarySuggestion={salarySuggestion}
+        hasSavedInvoice={entries.length > 0}
+        payDay={ledger.payDay}
+        setPayDay={ledger.setPayDay}
+        nextPayDate={ledger.nextPayDate}
+        currentCycleStart={ledger.currentCycleStart}
+        daysUntilNextPay={ledger.daysUntilNextPay}
+        thisMonthKey={ledger.thisMonthKey}
+        startingBalance={ledger.startingBalance}
+        setStartingBalance={ledger.setStartingBalance}
+        credited={ledger.credited}
+        creditSalary={ledger.creditSalary}
+        unCredit={ledger.unCredit}
+        availableCash={ledger.availableCash}
+        loanCash={ledger.loanCash}
+      />
     </div>
   )
 }
