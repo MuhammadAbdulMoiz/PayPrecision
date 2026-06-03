@@ -4,6 +4,7 @@ import { useGoals } from '../hooks/useGoals'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useLoans, useLoanPayments } from '../hooks/useLoans'
 import { useAssets } from '../hooks/useAssets'
+import { usePayCycle, fmtShortDate } from '../hooks/usePayCycle'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -671,6 +672,360 @@ function NetWorthTracker({ goals, finalSalary, loans = [], onPayLoan, onAddLoan,
   )
 }
 
+// ─── Burn Rate (with optional asset sale) ─────────────────────────────────────
+
+function survivalMeta(months) {
+  if (!months) return { color: '#64748b', label: '—' }
+  if (months < 3)  return { color: '#ef4444', label: 'Critical' }
+  if (months < 6)  return { color: '#f59e0b', label: 'Low' }
+  if (months < 12) return { color: '#f59e0b', label: 'Moderate' }
+  return { color: '#10b981', label: 'Healthy' }
+}
+
+function BurnRateCard({ expenses, goals, assets, months6 }) {
+  const [selectedIds, setSelectedIds] = useLocalStorage('pp-burn-sell-assets', [])
+
+  // Average burn over months that actually have spending data (not blindly /3)
+  const avgBurn = useMemo(() => {
+    const totals = months6
+      .map((mo) => expenses.filter((e) => e.month === mo).reduce((a, e) => a + e.amount, 0))
+      .filter((t) => t > 0)
+    return totals.length ? totals.reduce((s, t) => s + t, 0) / totals.length : 0
+  }, [expenses, months6])
+
+  // Liquid savings = goal savings only. Physical assets are illiquid until sold.
+  const liquidSavings = goals.reduce((s, g) => s + (g.savedAmount || 0), 0)
+  const sellable = assets.filter((a) => (a.currentValue || 0) > 0)
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  const selectedSellable = sellable.filter((a) => selectedSet.has(a.id))
+  const selectedCount = selectedSellable.length
+  const sellValue = selectedSellable.reduce((s, a) => s + (a.currentValue || 0), 0)
+
+  const baseMonths = avgBurn > 0 ? liquidSavings / avgBurn : null
+  const sellMonths = avgBurn > 0 ? (liquidSavings + sellValue) / avgBurn : null
+  const activeMonths = sellValue > 0 ? sellMonths : baseMonths
+  const extraMonths = sellMonths != null && baseMonths != null ? sellMonths - baseMonths : 0
+
+  const { color, label } = survivalMeta(activeMonths)
+
+  const toggle = (id) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  const selectAll = () => setSelectedIds(sellable.map((a) => a.id))
+  const clearAll = () => setSelectedIds([])
+
+  return (
+    <div className="glass rounded-2xl p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-500/20">
+          <svg className="h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/>
+            <path d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"/>
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-200">Burn Rate</h3>
+          <p className="text-[11px] text-slate-500">How long your money lasts at current spending</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl bg-white/5 p-3 text-center">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Survival</p>
+          <p className="mt-1 text-2xl font-extrabold" style={{ color }}>{activeMonths ? Math.floor(activeMonths) : '—'}</p>
+          <p className="text-[10px] text-slate-500">months</p>
+        </div>
+        <div className="rounded-xl bg-white/5 p-3 text-center">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Avg Burn</p>
+          <p className="mt-1 text-sm font-bold text-slate-200">PKR {fmtPKR(avgBurn)}</p>
+          <p className="text-[10px] text-slate-500">/month</p>
+        </div>
+        <div className="rounded-xl bg-white/5 p-3 text-center">
+          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Status</p>
+          <p className="mt-1 text-sm font-bold" style={{ color }}>{label}</p>
+          <p className="text-[10px] text-slate-500">runway</p>
+        </div>
+      </div>
+
+      {/* Without-selling vs if-sold comparison */}
+      {sellValue > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-center">
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">If you don&apos;t sell</p>
+            <p className="mt-0.5 text-sm font-bold text-slate-300">{baseMonths ? Math.floor(baseMonths) : '—'} mo</p>
+          </div>
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2.5 text-center">
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-emerald-400">If you sell selected</p>
+            <p className="mt-0.5 text-sm font-bold text-emerald-400">
+              {sellMonths ? Math.floor(sellMonths) : '—'} mo
+              {extraMonths >= 1 && <span className="ml-1 text-[10px] font-semibold">(+{Math.floor(extraMonths)})</span>}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Asset sale selector */}
+      {sellable.length > 0 && (
+        <div className="mt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              Sell assets to extend runway
+            </p>
+            <div className="flex items-center gap-2 text-[10px]">
+              <button onClick={selectAll} className="text-slate-400 hover:text-emerald-400">Select all</button>
+              <span className="text-slate-700">·</span>
+              <button onClick={clearAll} className="text-slate-400 hover:text-red-400">Clear</button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            {sellable.map((a) => {
+              const checked = selectedSet.has(a.id)
+              return (
+                <button key={a.id} onClick={() => toggle(a.id)}
+                  className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
+                    checked ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-white/10 bg-white/5 hover:border-white/20'
+                  }`}>
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                      checked ? 'border-emerald-400 bg-emerald-500/30 text-emerald-300' : 'border-white/20 text-transparent'
+                    }`}>
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M5 13l4 4L19 7"/></svg>
+                    </span>
+                    <span className="truncate text-xs text-slate-300">{a.name}</span>
+                  </span>
+                  <span className={`shrink-0 text-xs font-semibold ${checked ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    PKR {fmtPKR(a.currentValue || 0)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          {sellValue > 0 && (
+            <p className="mt-2 text-[10px] text-emerald-400/80">
+              Selling {selectedCount} item{selectedCount !== 1 ? 's' : ''} frees PKR {fmtPKR(sellValue)} of cash.
+            </p>
+          )}
+        </div>
+      )}
+
+      <p className="mt-3 text-[10px] text-slate-500">
+        Based on PKR {fmtPKR(liquidSavings + sellValue)} available
+        {sellValue > 0 ? ' (savings + selected items)' : ' liquid savings'} ÷ PKR {fmtPKR(avgBurn)}/mo avg spend.
+        {sellable.length === 0 && ' Add owned items to model selling them here.'}
+      </p>
+      {activeMonths && activeMonths < 6 && (
+        <p className="mt-1 text-[11px] text-amber-400/80">
+          ⚠ Less than 6 months runway. Consider reducing spending or increasing savings.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Financial Calendar (user-defined pay cycle) ──────────────────────────────
+
+function FinancialCalendarCard({ expenses, loans, finalSalary = 0 }) {
+  const { payDay, setPayDay, credits, setCredit, clearCredit, nextPayDate, currentCycleStart, daysUntilNextPay } = usePayCycle()
+  const [editingDay, setEditingDay] = useState(false)
+  const [dayInput, setDayInput] = useState(String(payDay))
+  const [creditOpen, setCreditOpen] = useState(false)
+  const [creditDate, setCreditDate] = useState(() => new Date().toISOString().slice(0, 10))
+
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = today.getMonth()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const todayDay = today.getDate()
+  const salaryDay = Math.min(payDay, daysInMonth)
+  const thisMonthKey = `${year}-${String(month + 1).padStart(2, '0')}`
+  const creditedISO = credits[thisMonthKey] || null
+
+  const saveDay = () => {
+    setPayDay(dayInput)
+    setEditingDay(false)
+  }
+
+  // Loan installment events (real dates from loan records)
+  const loanEvents = loans
+    .filter((l) => l.status !== 'paid' && l.monthlyInstallment > 0)
+    .map((l) => ({
+      day: new Date(l.loanDate + 'T00:00:00').getDate(),
+      label: `${l.lenderName} installment`,
+      amount: l.monthlyInstallment,
+      type: 'loan',
+    }))
+
+  const events = [
+    { day: salaryDay, label: creditedISO ? 'Salary credited' : 'Salary due', type: 'salary', amount: finalSalary || null, credited: !!creditedISO },
+    ...loanEvents,
+  ].sort((a, b) => a.day - b.day)
+
+  const upcoming = events.filter((e) => e.day >= todayDay || (e.type === 'salary' && e.credited))
+  const past = events.filter((e) => e.day < todayDay && !(e.type === 'salary' && e.credited))
+
+  // Recurring expenses listed per-cycle (no exact day in data) — mirrors Expense Tracker
+  const recurring = expenses.filter((e) => e.recurring)
+  const recurringByName = Object.values(
+    recurring.reduce((acc, e) => {
+      const k = e.name.toLowerCase().trim()
+      if (!acc[k]) acc[k] = { name: e.name, amount: e.amount, category: e.category }
+      return acc
+    }, {})
+  )
+  const recurringTotal = recurringByName.reduce((s, e) => s + (e.amount || 0), 0)
+
+  const typeColor = { salary: '#10b981', bill: '#f59e0b', loan: '#ef4444', sub: '#8b5cf6' }
+  const typeLabel = { salary: '💰', bill: '📋', loan: '💳', sub: '🔄' }
+
+  return (
+    <div className="glass rounded-2xl p-5">
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/20">
+            <svg className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-200">Financial Calendar</h3>
+            <p className="text-[11px] text-slate-500">
+              Cycle {fmtShortDate(currentCycleStart)} – {fmtShortDate(nextPayDate)} · {daysUntilNextPay} day{daysUntilNextPay !== 1 ? 's' : ''} to pay
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Pay day config */}
+      <div className="mb-4 rounded-xl border border-white/10 bg-white/5 p-3">
+        {editingDay ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-400">Salary credited on day</span>
+            <input type="number" min="1" max="31" value={dayInput} autoFocus
+              onChange={(e) => setDayInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveDay(); if (e.key === 'Escape') setEditingDay(false) }}
+              className="w-16 rounded-lg border border-blue-400/40 bg-white/5 px-2 py-1 text-sm text-white outline-none" />
+            <span className="text-[11px] text-slate-500">of each month</span>
+            <div className="ml-auto flex gap-1.5">
+              <button onClick={saveDay} className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500">Save</button>
+              <button onClick={() => setEditingDay(false)} className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:text-white">✕</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-300">
+                Pay day: <span className="font-semibold text-blue-400">{payDay}{ordinal(payDay)}</span> of the month
+              </p>
+              <p className="text-[10px] text-slate-500">Next salary ≈ {fmtShortDate(nextPayDate)}</p>
+            </div>
+            <button onClick={() => { setDayInput(String(payDay)); setEditingDay(true) }}
+              className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-400 hover:border-white/20 hover:text-white">
+              Edit
+            </button>
+          </div>
+        )}
+
+        {/* Mark-credited override (for delayed pay) */}
+        <div className="mt-2.5 border-t border-white/10 pt-2.5">
+          {creditedISO ? (
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] text-emerald-400">
+                ✓ Credited on {new Date(creditedISO + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {(() => {
+                  const actual = new Date(creditedISO + 'T00:00:00').getDate()
+                  const delay = actual - salaryDay
+                  return delay > 0 ? <span className="ml-1 text-amber-400">({delay} day{delay !== 1 ? 's' : ''} late)</span> : null
+                })()}
+              </p>
+              <button onClick={() => clearCredit(thisMonthKey)}
+                className="text-[11px] text-slate-500 hover:text-red-400">Undo</button>
+            </div>
+          ) : creditOpen ? (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-400">Credited on</span>
+              <input type="date" value={creditDate} onChange={(e) => setCreditDate(e.target.value)}
+                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200 outline-none focus:border-emerald-400/50" />
+              <div className="ml-auto flex gap-1.5">
+                <button onClick={() => { setCredit(thisMonthKey, creditDate); setCreditOpen(false) }}
+                  className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-500">Save</button>
+                <button onClick={() => setCreditOpen(false)} className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:text-white">✕</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setCreditOpen(true)}
+              className="text-[11px] font-semibold text-emerald-400/90 hover:text-emerald-300">
+              + Salary arrived? Mark it credited
+            </button>
+          )}
+        </div>
+      </div>
+
+      {upcoming.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Upcoming</p>
+          <div className="space-y-1.5">
+            {upcoming.map((e, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
+                  style={{ backgroundColor: typeColor[e.type] + '20', color: typeColor[e.type] }}>
+                  {e.day}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-slate-200 truncate">
+                    {typeLabel[e.type]} {e.label}
+                    {e.type === 'salary' && e.credited && <span className="ml-1.5 text-[10px] text-emerald-400">✓</span>}
+                  </p>
+                </div>
+                {e.amount ? <span className="text-xs font-semibold shrink-0" style={{ color: typeColor[e.type] }}>
+                  {e.type === 'salary' ? '+' : '-'}PKR {fmtPKR(e.amount)}
+                </span> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {past.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-600">Earlier this month</p>
+          <div className="space-y-1 opacity-50">
+            {past.map((e, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-1.5">
+                <span className="text-[11px] text-slate-600 w-6 text-center">{e.day}</span>
+                <span className="text-xs text-slate-600 truncate">{typeLabel[e.type]} {e.label}</span>
+                {e.amount ? <span className="text-[11px] text-slate-600 ml-auto shrink-0">PKR {fmtPKR(e.amount)}</span> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recurring this cycle — kept in sync with the Expense Tracker */}
+      {recurringByName.length > 0 && (
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Recurring this cycle</p>
+            <span className="text-[11px] font-semibold text-slate-400">PKR {fmtPKR(recurringTotal)}/mo</span>
+          </div>
+          <div className="space-y-1">
+            {recurringByName.map((e, i) => (
+              <div key={i} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5">
+                <span className="text-xs text-slate-300 truncate">🔄 {e.name}</span>
+                <span className="text-xs font-semibold text-slate-400 shrink-0">PKR {fmtPKR(e.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return s[(v - 20) % 10] || s[v] || s[0]
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const EXPENSE_CATS = ['Housing','Food','Transport','Subscriptions','Trips','Treats','Utilities','Healthcare','Education','Shopping','Other']
@@ -861,63 +1216,7 @@ export default function InsightsPage({ entries, finalSalary }) {
       </div>
 
       {/* ── Burn Rate Calculator ── */}
-      {(() => {
-        // Average burn over months that actually have spending data (not blindly /3)
-        const monthTotals = months6
-          .map(m => expenses.filter(e => e.month === m).reduce((a, e) => a + e.amount, 0))
-          .filter(t => t > 0)
-        const avgBurn = monthTotals.length
-          ? monthTotals.reduce((s, t) => s + t, 0) / monthTotals.length
-          : 0
-        // Survival uses LIQUID savings only — goal savings. Physical assets (bike,
-        // laptop, monitor) can't be spent to cover monthly bills, so they're excluded.
-        const liquidSavings = goals.reduce((s, g) => s + (g.savedAmount || 0), 0)
-        const months = avgBurn > 0 ? liquidSavings / avgBurn : null
-        const color  = !months ? '#64748b' : months < 3 ? '#ef4444' : months < 6 ? '#f59e0b' : '#10b981'
-        const label  = !months ? '—' : months < 3 ? 'Critical' : months < 6 ? 'Low' : months < 12 ? 'Moderate' : 'Healthy'
-        return (
-          <div className="glass rounded-2xl p-5">
-            <div className="mb-4 flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-500/20">
-                <svg className="h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/>
-                  <path d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"/>
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-200">Burn Rate</h3>
-                <p className="text-[11px] text-slate-500">How long your liquid savings last at current spending</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl bg-white/5 p-3 text-center">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Survival</p>
-                <p className="mt-1 text-2xl font-extrabold" style={{ color }}>{months ? Math.floor(months) : '—'}</p>
-                <p className="text-[10px] text-slate-500">months</p>
-              </div>
-              <div className="rounded-xl bg-white/5 p-3 text-center">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Avg Burn</p>
-                <p className="mt-1 text-sm font-bold text-slate-200">PKR {fmtPKR(avgBurn)}</p>
-                <p className="text-[10px] text-slate-500">/month</p>
-              </div>
-              <div className="rounded-xl bg-white/5 p-3 text-center">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Status</p>
-                <p className="mt-1 text-sm font-bold" style={{ color }}>{label}</p>
-                <p className="text-[10px] text-slate-500">runway</p>
-              </div>
-            </div>
-            <p className="mt-3 text-[10px] text-slate-500">
-              Based on PKR {fmtPKR(liquidSavings)} liquid savings ÷ PKR {fmtPKR(avgBurn)}/mo avg spend.
-              Physical items aren&apos;t counted — they can&apos;t pay the bills.
-            </p>
-            {months && months < 6 && (
-              <p className="mt-1 text-[11px] text-amber-400/80">
-                ⚠ Less than 6 months runway. Consider reducing spending or increasing savings.
-              </p>
-            )}
-          </div>
-        )
-      })()}
+      <BurnRateCard expenses={expenses} goals={goals} assets={assets} months6={months6} />
 
       {/* ── Expense Leak Detector ── */}
       {(() => {
@@ -1065,93 +1364,7 @@ export default function InsightsPage({ entries, finalSalary }) {
       })()}
 
       {/* ── Financial Calendar ── */}
-      {(() => {
-        const today = new Date()
-        const year  = today.getFullYear()
-        const month = today.getMonth()
-        const daysInMonth = new Date(year, month + 1, 0).getDate()
-        const todayDay = today.getDate()
-
-        // Build events list
-        const events = []
-
-        // Salary on day 1
-        events.push({ day: 1, label: 'Salary credited', type: 'salary' })
-
-        // Recurring expenses
-        const recurringThisMonth = expenses.filter(e => e.recurring)
-        recurringThisMonth.forEach(e => {
-          events.push({ day: 5, label: e.name, amount: e.amount, type: e.category === 'Subscriptions' ? 'sub' : 'bill' })
-        })
-
-        // Loan installments
-        loans.filter(l => l.status !== 'paid' && l.monthlyInstallment > 0).forEach(l => {
-          const loanDay = new Date(l.loanDate + 'T00:00:00').getDate()
-          events.push({ day: loanDay, label: `${l.lenderName} installment`, amount: l.monthlyInstallment, type: 'loan' })
-        })
-
-        events.sort((a, b) => a.day - b.day)
-        const upcoming = events.filter(e => e.day >= todayDay)
-        const past     = events.filter(e => e.day < todayDay)
-
-        const typeColor = { salary: '#10b981', bill: '#f59e0b', loan: '#ef4444', sub: '#8b5cf6' }
-        const typeLabel = { salary: '💰', bill: '📋', loan: '💳', sub: '🔄' }
-
-        return (
-          <div className="glass rounded-2xl p-5">
-            <div className="mb-4 flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/20">
-                <svg className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-200">Financial Calendar</h3>
-                <p className="text-[11px] text-slate-500">
-                  {today.toLocaleString('en-US', { month: 'long', year: 'numeric' })} · Day {todayDay} of {daysInMonth}
-                </p>
-              </div>
-            </div>
-
-            {upcoming.length > 0 && (
-              <div className="mb-3">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Upcoming</p>
-                <div className="space-y-1.5">
-                  {upcoming.map((e, i) => (
-                    <div key={i} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
-                        style={{ backgroundColor: typeColor[e.type] + '20', color: typeColor[e.type] }}>
-                        {e.day}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-slate-200 truncate">{typeLabel[e.type]} {e.label}</p>
-                      </div>
-                      {e.amount && <span className="text-xs font-semibold shrink-0" style={{ color: typeColor[e.type] }}>
-                        {e.type === 'salary' ? '+' : '-'}PKR {fmtPKR(e.amount)}
-                      </span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {past.length > 0 && (
-              <div>
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-600">Earlier this month</p>
-                <div className="space-y-1 opacity-50">
-                  {past.map((e, i) => (
-                    <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-1.5">
-                      <span className="text-[11px] text-slate-600 w-6 text-center">{e.day}</span>
-                      <span className="text-xs text-slate-600 truncate">{typeLabel[e.type]} {e.label}</span>
-                      {e.amount && <span className="text-[11px] text-slate-600 ml-auto shrink-0">PKR {fmtPKR(e.amount)}</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )
-      })()}
+      <FinancialCalendarCard expenses={expenses} loans={loans} finalSalary={finalSalary} />
     </div>
   )
 }

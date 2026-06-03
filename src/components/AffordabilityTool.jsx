@@ -4,17 +4,21 @@ function fmtPKR(v) {
   return (v || 0).toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
-export default function AffordabilityTool({ finalSalary = 0, dailyWage = 0, goals = [], monthlyExpenses = 0, totalAvailable = 0 }) {
+export default function AffordabilityTool({ finalSalary = 0, dailyWage = 0, goals = [], monthlyExpenses = 0, totalAvailable = 0, nextPayLabel = '', daysUntilNextPay = 0 }) {
   const [amount, setAmount] = useState('')
   const [open, setOpen] = useState(false)
 
   const cost = Number(amount) || 0
+  // "Until your next salary" phrasing — falls back gracefully if pay cycle absent
+  const untilPay = nextPayLabel ? `until ${nextPayLabel}` : 'until payday'
 
   const analysis = useMemo(() => {
     if (!cost || !finalSalary) return null
 
     const daysOfWork = dailyWage > 0 ? cost / dailyWage : null
     const pctOfSalary = (cost / finalSalary) * 100
+    // Remaining cash you have to last until the next salary = available cash this
+    // cycle minus what you've already spent. Matches the Expense Tracker's "Left".
     const budgetRemaining = Math.max(totalAvailable - monthlyExpenses, 0)
     const canAffordFromRemaining = cost <= budgetRemaining
 
@@ -80,10 +84,11 @@ export default function AffordabilityTool({ finalSalary = 0, dailyWage = 0, goal
                   : 'bg-red-500/10 border-red-500/20'
               }`}>
                 <p className={`text-sm font-bold ${analysis.canAffordFromRemaining ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {analysis.canAffordFromRemaining ? '✓ You can afford it' : '✗ This exceeds your remaining budget'}
+                  {analysis.canAffordFromRemaining ? '✓ You can afford it' : `✗ This exceeds your cash ${untilPay}`}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Budget remaining: PKR {fmtPKR(analysis.budgetRemaining)} · Cost: PKR {fmtPKR(cost)}
+                  Cash left {untilPay}: PKR {fmtPKR(analysis.budgetRemaining)} · Cost: PKR {fmtPKR(cost)}
+                  {daysUntilNextPay > 0 && <span className="text-slate-500"> · {daysUntilNextPay} day{daysUntilNextPay !== 1 ? 's' : ''} to go</span>}
                 </p>
               </div>
 
@@ -100,7 +105,9 @@ export default function AffordabilityTool({ finalSalary = 0, dailyWage = 0, goal
                   <p className="mt-1 text-sm font-bold text-blue-400">{analysis.pctOfSalary.toFixed(1)}%</p>
                 </div>
                 <div className="rounded-xl bg-white/5 p-2.5 text-center">
-                  <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">After Purchase</p>
+                  <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">
+                    Left {nextPayLabel ? `until ${nextPayLabel}` : 'after buy'}
+                  </p>
                   <p className={`mt-1 text-sm font-bold ${analysis.budgetRemaining - cost >= 0 ? 'text-slate-200' : 'text-red-400'}`}>
                     PKR {fmtPKR(Math.abs(analysis.budgetRemaining - cost))}
                     {analysis.budgetRemaining - cost < 0 && <span className="text-[9px] text-red-400 block">over</span>}

@@ -3,6 +3,7 @@ import { useGoals } from '../hooks/useGoals'
 import { useLoans } from '../hooks/useLoans'
 import { useAssets } from '../hooks/useAssets'
 import { useExpenses } from '../hooks/useExpenses'
+import { usePayCycle, fmtShortDate } from '../hooks/usePayCycle'
 import GoalsDashboard from './GoalsDashboard'
 import GoalCard from './GoalCard'
 import GoalForm from './GoalForm'
@@ -17,6 +18,7 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
   const { loans, addLoan, updateLoan, deleteLoan, uploadLoanImage } = useLoans()
   const { assets, addAsset, updateAsset, deleteAsset, uploadAssetImage } = useAssets()
   const { expenses } = useExpenses()
+  const { nextPayDate, daysUntilNextPay } = usePayCycle()
   const [showForm, setShowForm] = useState(false)
   const [showAllGoals, setShowAllGoals] = useState(false)
 
@@ -24,6 +26,7 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
   const monthlyExpenses = expenses
     .filter(e => e.month === currentMonth)
     .reduce((s, e) => s + (e.amount || 0), 0)
+  const nextPayLabel = fmtShortDate(nextPayDate)
 
   const handleAddGoal = (data) => {
     addGoal(data)
@@ -134,6 +137,8 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
         goals={goals}
         monthlyExpenses={monthlyExpenses}
         totalAvailable={finalSalary + loans.filter(l => l.status !== 'paid' && !l.goalId && (l.currency === 'PKR' || !l.currency)).reduce((s, l) => s + (l.remaining || 0), 0)}
+        nextPayLabel={nextPayLabel}
+        daysUntilNextPay={daysUntilNextPay}
       />
 
       {/* Savings Accelerator */}
@@ -142,7 +147,7 @@ export default function GoalsPage({ finalSalary, dailyWage = 0 }) {
       {/* Expense Tracker */}
       <div>
         <h3 className="mb-3 text-lg font-bold text-white light:text-slate-800">Expense Tracker</h3>
-        <ExpenseTracker finalSalary={finalSalary} loans={loans} />
+        <ExpenseTracker finalSalary={finalSalary} loans={loans} daysUntilPay={daysUntilNextPay} nextPayLabel={nextPayLabel} />
       </div>
 
       {showForm && (

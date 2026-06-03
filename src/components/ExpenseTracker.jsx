@@ -212,7 +212,7 @@ function SpendingDonut({ data, total }) {
 
 const EMPTY_FORM = { name: '', category: 'Food', amount: '', note: '', recurring: false }
 
-export default function ExpenseTracker({ finalSalary = 0, loans = [] }) {
+export default function ExpenseTracker({ finalSalary = 0, loans = [], daysUntilPay = 0, nextPayLabel = '' }) {
   const { expenses, addExpense, updateExpense, deleteExpense, populateRecurring } = useExpenses()
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
@@ -283,10 +283,13 @@ export default function ExpenseTracker({ finalSalary = 0, loans = [] }) {
   const healthColor = salaryRatio < 50 ? '#10b981' : salaryRatio < 80 ? '#f59e0b' : '#ef4444'
   const healthLabel = salaryRatio < 50 ? 'Healthy' : salaryRatio < 80 ? 'Caution' : 'Over budget'
 
-  // Safe-to-Spend: remaining cash / remaining days in month
+  // Safe-to-Spend: remaining cash spread over the days left until the next salary.
+  // Horizon follows the pay cycle (e.g. 15→15), not just the end of the calendar month.
   const today = new Date()
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
-  const remainingDays = Math.max(daysInMonth - today.getDate() + 1, 1)
+  const isCurrentMonth = filterMonth === new Date().toISOString().slice(0, 7)
+  const calendarDaysLeft = Math.max(daysInMonth - today.getDate() + 1, 1)
+  const remainingDays = isCurrentMonth && daysUntilPay > 0 ? daysUntilPay : calendarDaysLeft
   const remaining = Math.max(totalAvailable - total, 0)
   const safePerDay = remaining / remainingDays
 
@@ -396,16 +399,25 @@ export default function ExpenseTracker({ finalSalary = 0, loans = [] }) {
                 PKR {fmtPKR(Math.abs(safePerDay))}<span className="text-sm font-normal text-slate-400">/day</span>
               </p>
               <p className="text-[10px] text-slate-500 mt-0.5">
-                PKR {fmtPKR(remaining)} left · {remainingDays} day{remainingDays !== 1 ? 's' : ''} remaining
+                PKR {fmtPKR(remaining)} left · {remainingDays} day{remainingDays !== 1 ? 's' : ''}
+                {isCurrentMonth && daysUntilPay > 0 ? (nextPayLabel ? ` until ${nextPayLabel}` : ' until next salary') : ' remaining'}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Month progress</p>
-              <p className="text-sm font-bold text-slate-300">{today.getDate()}/{daysInMonth}</p>
-              <div className="mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-slate-400 transition-all"
-                  style={{ width: `${(today.getDate() / daysInMonth) * 100}%` }} />
-              </div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                {isCurrentMonth && daysUntilPay > 0 ? 'Until payday' : 'Month progress'}
+              </p>
+              {isCurrentMonth && daysUntilPay > 0 ? (
+                <p className="text-sm font-bold text-slate-300">{daysUntilPay} day{daysUntilPay !== 1 ? 's' : ''}</p>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-slate-300">{today.getDate()}/{daysInMonth}</p>
+                  <div className="mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-white/10">
+                    <div className="h-full rounded-full bg-slate-400 transition-all"
+                      style={{ width: `${(today.getDate() / daysInMonth) * 100}%` }} />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
